@@ -30,14 +30,15 @@ int maxLayers[] = {120};
 //Set DNN bias
 float neuralNetBias[] = {-0.3f, -0.35f, -0.4f, -0.45f};
 
+//ignore MAT file format
 int main(){
 	size_t Nlen = sizeof(Nneuron)/sizeof(Nneuron[0]);
 	size_t maxLayersLen = sizeof(maxLayers)/sizeof(maxLayers[0]);
 	Eigen::SparseMatrix<float> featureVectors(numMNIST, 1);
 	featureVectors.reserve(numMNIST/200);
 	for(size_t i = 0; i < Nlen; ++i){
-		if(READTSV) featureVectors = ReadSparse(StrFileRead(INPUTFILE + std::to_string(Nneuron[i]) + ".tsv"), Nneuron[i], numMNIST, true);
-		//else if(READMAT)
+		//Read input vectors.
+		featureVectors = ReadSparse(StrFileRead(INPUTFILE + std::to_string(Nneuron[i]) + ".tsv"), Nneuron[i], numMNIST, true);
 		int NfeatureVectors = featureVectors.cols();
 
 		//Read layers.
@@ -47,16 +48,12 @@ int main(){
 			int DNNedges = 0;
 			std::vector<Eigen::SparseMatrix<float> > layers;
 			layers.reserve(maxLayers[j]);
-			std::vector<float> bias;
-			bias.reserve(maxLayers[j]);
 
-			//Read Layer
+			//Read Layer and time
 			auto startLayer = std::chrono::high_resolution_clock::now();
 			for(int k = 0; k < maxLayers[j]; ++k){
-				if(READTSV) layers.push_back(ReadSparse(StrFileRead(LAYERFILE + std::to_string(Nneuron[i]) + "/n" + std::to_string(Nneuron[i]) + "-l" +  std::to_string(k + 1) + ".tsv"), Nneuron[i], numMNIST,  false));
-				//else if(READMAT);
+				layers.push_back(ReadSparse(StrFileRead(LAYERFILE + std::to_string(Nneuron[i]) + "/n" + std::to_string(Nneuron[i]) + "-l" +  std::to_string(k + 1) + ".tsv"), Nneuron[i], numMNIST,  false));
 				DNNedges += layers[k].nonZeros();
-				bias.push_back(neuralNetBias[i]);
 			}
 			auto stopLayer = std::chrono::high_resolution_clock::now();
 			auto readLayerTime = std::chrono::duration_cast<std::chrono::seconds>(stopLayer - startLayer).count();
@@ -66,7 +63,7 @@ int main(){
 
 			//Perform and time challenge
 			auto startRun = std::chrono::high_resolution_clock::now();
-			Eigen::SparseMatrix<float> scores = inferenceReLUvec(layers, bias, featureVectors);
+			Eigen::SparseMatrix<float> scores = inferenceReLUvec(layers, neuralNetBias[j], featureVectors);
 			auto stopRun = std::chrono::high_resolution_clock::now();
 			auto challengeRunTime = std::chrono::duration_cast<std::chrono::seconds>(stopRun - startRun).count();
 			auto challengeRunRate = NfeatureVectors * (DNNedges / challengeRunTime);
