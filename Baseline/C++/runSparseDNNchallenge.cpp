@@ -9,7 +9,7 @@
 
 const std::string INPUTFILE = "../MNIST/sparse-images-";
 const std::string CATEGORYFILE = "../MNIST/neuron";
-const std::string LAYERFILE = "../neuron1024";
+const std::string LAYERFILE = "../neuron";
 
 //currently ignore SAVCAT and READMAT.
 const bool SAVECAT = false;
@@ -53,7 +53,7 @@ int main(){
 			//Read Layer
 			auto startLayer = std::chrono::high_resolution_clock::now();
 			for(int k = 0; k < maxLayers[j]; ++k){
-				if(READTSV) layers.push_back(ReadSparse(StrFileRead(LAYERFILE + "/n" + std::to_string(Nneuron[i]) + "-l" +  std::to_string(k + 1) + ".tsv"), Nneuron[i], numMNIST,  false));
+				if(READTSV) layers.push_back(ReadSparse(StrFileRead(LAYERFILE + std::to_string(Nneuron[i]) + "/n" + std::to_string(Nneuron[i]) + "-l" +  std::to_string(k + 1) + ".tsv"), Nneuron[i], numMNIST,  false));
 				//else if(READMAT);
 				DNNedges += layers[k].nonZeros();
 				bias.push_back(neuralNetBias[i]);
