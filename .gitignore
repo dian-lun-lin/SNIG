@@ -1,0 +1,4 @@
+*.tsv
+*.log
+**/MNIST
+**/neuron*
