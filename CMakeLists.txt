@@ -9,12 +9,45 @@ project(SparseDNN VERSION 1.0.0 LANGUAGES CXX)
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
 
-# TODO: finish compiler vendor on GCC and Clang 
+#& TODO: finish compiler vendor on GCC and Clang 
+#not test yet
+
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "7.3")
+	  message(FATAL_ERROR "\n SparseDNN requires g++ at least v7.3")
+  endif()
+## clang++
+elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+  if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "6.0")
+	  message(FATAL_ERROR "\n SparseDNN requires clang++ at least v6.0")
+  endif() 
+endif()
+
+#compiler setting 
+add_library(error_settings INTERFACE)
+
+target_compile_options(
+  error_settings
+  INTERFACE
+  $<$<CXX_COMPILER_ID:Clang>:-Wall -Wextra -Wfatal-errors>
+  $<$<CXX_COMPILER_ID:GNU>:-Wall -Wextra -Wfatal-errors>
+)
+
+#optmization
+add_library(optimize_settings INTERFACE)
+target_compile_options(
+  optimize_settings INTERFACE
+  $<$<AND:$<CONFIG:Release>,$<CXX_COMPILER_ID:Clang>>:-O2 -march=native>
+  $<$<AND:$<CONFIG:Release>,$<CXX_COMPILER_ID:GNU>>:-O2 -march=native>
+  $<$<AND:$<CONFIG:Debug>,$<CXX_COMPILER_ID:GNU>>:-O0 -g>
+  $<$<AND:$<CONFIG:Debug>,$<CXX_COMPILER_ID:Clang>>:-O0 -g>
+)
+
+# CXX target properties
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 
-# TODO: compiler setting 
-# -Wall 
-# C++14 or above
 
 
 # message
