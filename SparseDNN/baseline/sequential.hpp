@@ -27,7 +27,7 @@ class Sequential {
     const size_t _num_layers;
     const T _bias;
 
-    void _check_passed(const Eigen::SparseMatrix<T>& output_mat) const;
+    bool _is_passed(const Eigen::SparseMatrix<T>& output_mat) const;
 
   public:
     
@@ -96,16 +96,19 @@ void Sequential<T>::infer() const {
   Y.makeCompressed();
   std::cout << "Done\n";
 
-  _check_passed(Y);
+  if(_is_passed(Y))
+    std::cout << "Challenge PASS\n";
+  else
+    std::cout << "Challenge FAILED\n";
 }
 
 template <typename T>
-void Sequential<T>::_check_passed(const Eigen::SparseMatrix<T>& output_mat) const {
+bool Sequential<T>::_is_passed(const Eigen::SparseMatrix<T>& output_mat) const {
 
   std::cout << "Checking correctness........................\n";
   auto golden_mat = _reader.read_golden(_num_inputs);
   Eigen::SparseMatrix<T> final_output_mat(_num_neurons, 1);
-  final_output_mat = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> \
+  final_output_mat = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>
 	  (output_mat).rowwise().sum().sparseView();
   final_output_mat = final_output_mat.unaryExpr([] (T a) {
     if(a > 0) return T(1);
@@ -114,10 +117,10 @@ void Sequential<T>::_check_passed(const Eigen::SparseMatrix<T>& output_mat) cons
 
   Eigen::SparseMatrix<T> diff_mat = golden_mat - final_output_mat;
   diff_mat = diff_mat.pruned();
-  if(diff_mat.nonZeros())
-    std::cout << "Challenge FAILED\n";
+  if(!diff_mat.nonZeros())
+    return true;
   else
-    std::cout << "Challenge PASSED\n" ;
+    return false;
 }
 
 }  // end of namespace sparse_dnn ----------------------------------------------
