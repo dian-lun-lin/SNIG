@@ -19,7 +19,6 @@ inline std::string read_file_to_string(const std::fs::path& path) {
   using namespace std::literals::string_literals;
 
 	std::ifstream f{ path };
-
   if(!f){
     throw std::runtime_error("cannot open the file"s + path.c_str());
   }
@@ -33,8 +32,12 @@ inline std::string read_file_to_string(const std::fs::path& path) {
 
 inline void write_file_from_string(const std::fs::path& path, const std::string& s) {
   // TODO
-	assert(std::fs::exists(path));
+  using namespace std::literals::string_literals;
+
 	std::ofstream f{ path };
+  if(!f){
+    throw std::runtime_error("cannot open the file"s + path.c_str());
+  }
 	f.write(&s[0], std::fs::file_size(path));
 }
 
