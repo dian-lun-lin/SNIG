@@ -111,10 +111,9 @@ Eigen::SparseMatrix<T> tsv_string_to_matrix(
     triplet_list.push_back(E(numerics[0] - 1,numerics[1] - 1, numerics[2]));
   }
 
-  Eigen::SparseMatrix<T> mat(rows, cols);
+  Eigen::SparseMatrix<T, Eigen::RowMajor> mat(rows, cols);
   mat.reserve(triplet_list.size());
   mat.setFromTriplets(triplet_list.begin(), triplet_list.end());
-  mat.makeCompressed();
   return mat;
 }
 
