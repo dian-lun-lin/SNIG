@@ -1,5 +1,6 @@
 #pragma once
 
-#include "baseline/sequential.hpp"
+#include "sequential/sequential.hpp"
+#include "parallel/data_parallel.hpp"
 
 

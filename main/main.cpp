@@ -13,14 +13,10 @@ namespace std {
 
 int main(int argc, char* argv[]) {
    
-  // TODO: study std::thread
-  // https://en.cppreference.com/w/cpp/thread/thread/thread
-  
-  // TODO: study std::promise and std::future
-  // https://en.cppreference.com/w/cpp/thread/promise
-  // https://en.cppreference.com/w/cpp/thread/future
 
   // usage: ./main -m sequential 
+  //        ./main -m data_parallel
+  //        --is_GPU on
   CLI::App app{"SparseDNN"};
   std::string mode = "sequential";
   app.add_option("-m, --mode", 
@@ -50,17 +46,27 @@ int main(int argc, char* argv[]) {
 
   CLI11_PARSE(app, argc, argv);
 
-  sparse_dnn::Sequential<float> sequential(
-    weight_path, 
-    bias,
-    num_neurons_per_layer, 
-    num_layers
-  );
-
   std::fs::path input_path("/home/dian-lun/dian/GraphChallenge_SparseDNN/dataset/MNIST/sparse-images-1024.tsv");
   std::fs::path golden_path("/home/dian-lun/dian/GraphChallenge_SparseDNN/dataset/MNIST/neuron1024-l120-categories.tsv");
+  //Data parallel mode
+  sparse_dnn::DataParallel<float> data_parallel(
+      weight_path,
+      bias,
+      num_neurons_per_layer,
+      num_layers
+      );
+  auto result = data_parallel.infer(input_path, 60000, false);
+
+
+  //Sequential mode
   //auto issue
-  auto result = sequential.infer(input_path, 60000);
+  //sparse_dnn::Sequential<float> sequential(
+    //weight_path, 
+    //bias,
+    //num_neurons_per_layer, 
+    //num_layers
+  //);
+  //auto result = sequential.infer(input_path, 60000);
   auto golden = sparse_dnn::read_golden<float>(golden_path, 60000);
   if(sparse_dnn::is_passed<float>(result, golden)){
     std::cout << "CHALLENGE PASSED\n";
