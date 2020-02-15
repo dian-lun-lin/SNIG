@@ -72,6 +72,9 @@ message(STATUS "building executables ...")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
 add_executable(main ${PROJECT_SOURCE_DIR}/main/main.cpp)
 target_link_libraries(main stdc++fs)
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
+target_link_libraries(main Threads::Threads)
 
 
 
