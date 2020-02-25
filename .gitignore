@@ -2,4 +2,7 @@
 *.log
 **/MNIST
 **/neuron*
+bin/
+build/
+dataset/
 .gitignore
