@@ -6,6 +6,9 @@
 #include <Eigen/Sparse>
 #include <vector>
 #include <string>
+#include <SparseDNN/utility/matrix_format.h>
+#include <numeric>
+#include <SparseDNN/utility/matrix_operation.hpp>
 
 namespace std {
 	namespace fs = experimental::filesystem;
@@ -13,15 +16,6 @@ namespace std {
 
 namespace sparse_dnn {
     
-//issue
-//T is the floating posize_t type, either float or double
-//static_assert(
-    //std::is_same<T, float>::value || std::is_same<T, double>::value,
-    //"data type must be either float or double"
-    //);
-
-// C++17 if constexpr - compile-time switch
-// SFINAE
 template <typename T>
 std::enable_if_t<std::is_same<T, float>::value, float> 
 to_numeric(const std::string& str) {
@@ -40,6 +34,23 @@ Eigen::SparseMatrix<T> tsv_string_to_matrix(
   const size_t rows,
   const size_t cols
 );
+
+template <typename T>
+void tsv_string_to_CSC_matrix(
+    const std::string& s,
+    const size_t cols,
+    CSCMatrix<T>& mat
+);
+
+template <typename T>
+void tsv_string_to_CSR_matrix(
+    const std::string& s,
+    const size_t rows,
+    CSRMatrix<T>& mat
+);
+
+inline
+size_t nnz(const std::string& s);
 
 inline
 std::string read_file_to_string(const std::fs::path& path);
@@ -96,25 +107,89 @@ Eigen::SparseMatrix<T> tsv_string_to_matrix(
   typedef Eigen::Triplet<T> E;
   std::string line;
   std::vector<E> triplet_list;
-  triplet_list.reserve(rows/200);
+  triplet_list.reserve(rows / 200);
   std::istringstream read_s(s);
 
-  std::vector<T> numerics;
+  std::vector<std::string> tokens;
 
   while(std::getline(read_s, line)){
     std::istringstream lineStream(line);
     std::string token;
-    numerics.clear();
+    tokens.clear();
     while(std::getline(lineStream, token, '\t')) {
-       numerics.push_back(to_numeric<T>(token));
+       tokens.push_back(token);
     }
-    triplet_list.push_back(E(numerics[0] - 1,numerics[1] - 1, numerics[2]));
+    triplet_list.push_back(E(
+      std::stoi(tokens[0]) - 1,
+      std::stoi(tokens[1]) - 1,
+      to_numeric<T>(tokens[2])
+    ));
   }
 
   Eigen::SparseMatrix<T, Eigen::RowMajor> mat(rows, cols);
   mat.reserve(triplet_list.size());
   mat.setFromTriplets(triplet_list.begin(), triplet_list.end());
   return mat;
+}
+
+//not able to transform directly
+template <typename T>
+void tsv_string_to_CSR_matrix(
+    const std::string& s,
+    const size_t rows,
+    const size_t cols,
+    CSRMatrix<T>& mat
+) {
+  //T is the floating posize_t type, either float or double
+  static_assert(
+      std::is_same<T, float>::value || std::is_same<T, double>::value,
+      "data type must be either float or double"
+      );
+
+  Eigen::SparseMatrix<T, Eigen::RowMajor> eigen_mat = tsv_string_to_matrix<T>(s, rows, cols);
+  eigen_sparse_to_CSR_matrix<T>(eigen_mat, mat);
+  return;
+}
+
+inline
+size_t nnz(const std::string& s){
+  return std::count(s.begin(), s.end(), '\n');
+}
+
+template <typename T>
+void tsv_string_to_CSC_matrix(
+    const std::string& s,
+    const size_t cols,
+    CSCMatrix<T>& mat
+) {
+
+  //T is the floating posize_t type, either float or double
+  static_assert(
+      std::is_same<T, float>::value || std::is_same<T, double>::value,
+      "data type must be either float or double"
+      );
+  
+  std::string line;
+  std::istringstream read_s(s);
+
+  std::vector<std::string> tokens;
+
+  size_t tmp = 0;
+  size_t count_per_col = 0;
+  size_t count_nnz = 0;
+  while(std::getline(read_s, line)){
+    std::istringstream lineStream(line);
+    std::string token;
+    tokens.clear();
+    while(std::getline(lineStream, token, '\t')) {
+       tokens.push_back(token);
+    }
+    ++mat.col_array[std::stoi(tokens[1])];
+    mat.row_array[count_nnz] = std::stoi(tokens[0]) - 1;
+    mat.data_array[count_nnz++] = to_numeric<T>(tokens[2]);
+  }
+  std::partial_sum(mat.col_array, mat.col_array + cols + 1, mat.col_array);
+  return;
 }
 
 

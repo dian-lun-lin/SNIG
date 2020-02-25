@@ -87,7 +87,7 @@ Eigen::SparseMatrix<T> Sequential<T>::infer(
   std::cout << "Start inference............................" << std::flush;
  //issue how eigen overload assignment
   Eigen::SparseMatrix<T> Z;
-  for(auto w : _weights){
+  for(const auto& w : _weights){
     Z=(Y * w).pruned();
     Z.coeffs() += _bias;
     Y = Z.unaryExpr([] (T a) {
