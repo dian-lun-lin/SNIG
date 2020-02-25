@@ -95,7 +95,7 @@ Eigen::SparseVector<T> CPUParallel<T>::infer(
   std::cout << "Start inference............................" << std::flush;
   Eigen::SparseVector<T> result;
 
-  size_t num_tasks = 32;
+  size_t num_tasks = 128;
   size_t num_threads = std::thread::hardware_concurrency();
   ThreadPool pool(num_threads);
 
@@ -132,8 +132,8 @@ Eigen::SparseVector<T> CPUParallel<T>::_data_parallel_task(
     const Eigen::SparseMatrix<T, Eigen::RowMajor>& y
 ) const {
 
-  Eigen::SparseMatrix<T> z;
-  Eigen::SparseMatrix<T> tmp{y};
+  Eigen::SparseMatrix<T, Eigen::RowMajor> z;
+  Eigen::SparseMatrix<T, Eigen::RowMajor> tmp{y};
   for(const auto& w:_weights){
     z = (tmp * w).pruned();
     z.coeffs() += _bias;
@@ -144,15 +144,7 @@ Eigen::SparseVector<T> CPUParallel<T>::_data_parallel_task(
      });
   }
 
-  Eigen::SparseVector<T> score = 
-    Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>(tmp)
-    .rowwise().sum().sparseView();
-
-  score = score.unaryExpr([] (T a) {
-    if(a > 0) return 1;
-    else return 0;
-  });
-  return score;
+  return get_score<T>(tmp);
 }
 
 }//end of namespace sparse_dnn ----------------------------------------------

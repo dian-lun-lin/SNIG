@@ -189,19 +189,10 @@ Eigen::SparseVector<T> GPUParallel<T>::infer(
   
   auto tmp = CSR_matrix_to_eigen_sparse(y, num_inputs, *_num_neurons_per_layer);
 
-  Eigen::SparseVector<T> score = 
-    Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>(tmp)
-    .rowwise().sum().sparseView();
-
-  score = score.unaryExpr([] (T a) {
-    if(a > 0) return 1;
-    else return 0;
-  });
-
   cudaFree(z.row_array);
   cudaFree(y.row_array);
 
-  return score;
+  return get_score(tmp);
 }
 
 

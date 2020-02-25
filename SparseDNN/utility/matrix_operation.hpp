@@ -19,7 +19,7 @@ Eigen::SparseVector<T> concatenate_by_row (
 
 template<typename T>
 void eigen_sparse_to_CSR_matrix(
-    const Eigen::SparseMatrix<T>& target,
+    const Eigen::SparseMatrix<T, Eigen::RowMajor>& target,
     CSRMatrix<T>& mat 
 );
 
@@ -28,6 +28,9 @@ void eigen_sparse_to_CSR_array(
     const Eigen::SparseVector<T>& target,
     SparseArray<T>& arr
 );
+
+template<typename T>
+Eigen::SparseVector<T> get_score(const Eigen::SparseMatrix<T>& target);
 
 //-----------------------------------------------------------------------------
 //Definition of reader function
@@ -104,8 +107,7 @@ Eigen::SparseVector<T> concatenate_by_row(
   score.reserve(num_nonZeros);
 
   size_t lump_sum_rows{0};
-  //issue cannot use T in innerIterator
-  for(size_t j = 0; j < targets.outerSize(); ++j){
+  for(size_t j = 0; j < targets.size(); ++j){
     for(typename Eigen::SparseVector<T>::InnerIterator it(targets[j]); it; ++it){
       score.coeffRef(lump_sum_rows + it.index()) =  it.value();
     }
@@ -163,6 +165,20 @@ Eigen::SparseMatrix<T> CSR_matrix_to_eigen_sparse(
   }
   result.makeCompressed();
   return result;
+}
+
+template<typename T>
+Eigen::SparseVector<T> get_score(const Eigen::SparseMatrix<T>& target){
+
+  //Eigen::SparseVector<T> score = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>
+    //(target).rowwise().sum().sparseView();
+  Eigen::SparseVector<T> score = (target * Eigen::Matrix<T, Eigen::Dynamic, 1>::Ones(target.cols())).sparseView();
+
+  score = score.unaryExpr([] (T a) {
+    if(a > 0) return 1;
+    else return 0;
+  });
+  return score;
 }
 
 }// end of namespace sparse_dnn ----------------------------------------------

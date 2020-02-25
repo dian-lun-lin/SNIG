@@ -3,6 +3,7 @@
 #include <iostream>
 #include <Eigen/Sparse>
 #include <SparseDNN/utility/reader.hpp>
+#include <SparseDNN/utility/matrix_operation.hpp>
 #include <vector>
 
 namespace std {
@@ -81,16 +82,16 @@ Eigen::SparseMatrix<T> Sequential<T>::infer(
 ) const {
 
   std::cout << "Reading input.............................." << std::flush;
-  auto Y = read_input<T>(input_path, num_inputs, _num_neurons_per_layer);
+  auto y = read_input<T>(input_path, num_inputs, _num_neurons_per_layer);
   std::cout << "Done" << std::endl;
 
   std::cout << "Start inference............................" << std::flush;
  //issue how eigen overload assignment
-  Eigen::SparseMatrix<T> Z;
+  Eigen::SparseMatrix<T> z;
   for(const auto& w : _weights){
-    Z=(Y * w).pruned();
-    Z.coeffs() += _bias;
-    Y = Z.unaryExpr([] (T a) {
+    z = (y * w).pruned();
+    z.coeffs() += _bias;
+    y = z.unaryExpr([] (T a) {
 	   if(a < 0) return T(0);
 	   else if(a > 32) return T(32);
 	   return a;
@@ -98,15 +99,7 @@ Eigen::SparseMatrix<T> Sequential<T>::infer(
   }
   std::cout << "Done\n";
 
-  std::cout << "Start scoring.............................." << std::flush;
-  Eigen::SparseVector<T> score = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>
-    (Y).rowwise().sum().sparseView();
-  score = score.unaryExpr([] (T a) {
-    if(a > 0) return 1;
-    else return 0;
-  });
-  std::cout << "Done\n";
-  return score;
+  return get_score(y);
 }
 }  // end of namespace sparse_dnn ----------------------------------------------
 
