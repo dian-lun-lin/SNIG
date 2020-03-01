@@ -1,7 +1,4 @@
-*.tsv
 *.log
-**/MNIST
-**/neuron*
 bin/
 build/
 dataset/
