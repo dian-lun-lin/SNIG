@@ -139,7 +139,7 @@ Eigen::SparseVector<T> GPUParallel<T>::infer(
     cudaMemcpy(d_w.col_array, w.col_array, sizeof(int) * (w_nnz), cudaMemcpyHostToDevice);
     cudaMemcpy(d_w.data_array, w.data_array, sizeof(T) * (w_nnz), cudaMemcpyHostToDevice);
     
-    cusparse_mutiplication<T>(d_y, d_w, num_inputs, _num_neurons_per_layer, _num_neurons_per_layer, y_nnz, w_nnz, d_z);
+    cusparse_mutiplication(d_y, d_w, num_inputs, _num_neurons_per_layer, _num_neurons_per_layer, y_nnz, w_nnz, d_z);
 
     cudaMemcpy(y.row_array, d_z.row_array, sizeof(int) * (num_inputs + 1), cudaMemcpyDeviceToHost);
 

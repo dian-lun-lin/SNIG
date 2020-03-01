@@ -2,8 +2,9 @@
 #include <Eigen/Sparse>
 #include <SparseDNN/utility/matrix_operation.hpp>
 #include <SparseDNN/utility/matrix_format.h>
-#include <cusparse.h>
+#include <cusparse_v2.h>
 #include <algorithm>
+#include<type_traits>
 
 #define gpu_err_check(ans) { gpu_assert((ans), __FILE__, __LINE__); }
 
@@ -50,16 +51,26 @@ void check_nnz(
   const T* bias
 );
 
-template <typename T>
 void cusparse_mutiplication(
-  const CSRMatrix<T>& a,
-  const CSRMatrix<T>& b,
+  const CSRMatrix<float>& a,
+  const CSRMatrix<float>& b,
   int a_row,
   int a_col,
   int b_col,
   int nnz_a,
   int nnz_b,
-  CSRMatrix<T>& c
+  CSRMatrix<float>& c
+);
+
+void cusparse_mutiplication(
+  const CSRMatrix<double>& a,
+  const CSRMatrix<double>& b,
+  int a_row,
+  int a_col,
+  int b_col,
+  int nnz_a,
+  int nnz_b,
+  CSRMatrix<double>& c
 );
 
 template <typename T>
@@ -137,16 +148,16 @@ void CSR_mutiply_CSC(
   }
 }
 
-template <typename T>
-void cusparse_mutiplication(
-  const CSRMatrix<T>& a,
-  const CSRMatrix<T>& b,
+void
+cusparse_mutiplication(
+  const CSRMatrix<float>& a,
+  const CSRMatrix<float>& b,
   int a_row,
   int a_col,
   int b_col,
   int nnz_a,
   int nnz_b,
-  CSRMatrix<T>& c
+  CSRMatrix<float>& c
 ) {
 
   cusparseHandle_t handle;
@@ -169,7 +180,90 @@ void cusparse_mutiplication(
   size_t buffer_size;
   void *buffer = NULL;
   int *nnz = &nnz_c;
-  T alpha = 1.0;
+  float alpha = 1.0;
+  cusparseSetPointerMode(handle, CUSPARSE_POINTER_MODE_HOST);
+  cusparseCreateCsrgemm2Info(&info);
+  cusparseScsrgemm2_bufferSizeExt(
+    handle, a_row, a_col, b_col, &alpha,
+    descr_a, nnz_a, a.row_array, a.col_array,
+    descr_b, nnz_b, b.row_array, b.col_array,
+    NULL,
+    descr_d, 0, NULL, NULL,
+    info,
+    &buffer_size
+  );
+  cudaMalloc(&buffer, buffer_size);
+
+  cusparseXcsrgemm2Nnz(
+    handle, a_row, a_col, b_col,
+    descr_a, nnz_a, a.row_array, a.col_array,
+    descr_b, nnz_b, b.row_array, b.col_array,
+    descr_d, 0, NULL, NULL,
+    descr_c, c.row_array, nnz,
+    info, 
+    buffer
+  );
+
+  if (NULL != nnz){
+      nnz_c = *nnz;
+  }else{
+      cudaMemcpy(&nnz_c, c.row_array + a_row, sizeof(int), cudaMemcpyDeviceToHost);
+      cudaMemcpy(&base_c, c.row_array, sizeof(int), cudaMemcpyDeviceToHost);
+      nnz_c -= base_c;
+  }
+
+  cudaMalloc(&c.col_array, sizeof(int) * nnz_c);
+  cudaMalloc(&c.data_array, sizeof(float) * nnz_c);
+  cusparseScsrgemm2(
+    handle, a_row, a_col, b_col, &alpha,
+    descr_a, nnz_a, a.data_array, a.row_array, a.col_array,
+    descr_b, nnz_b, b.data_array, b.row_array, b.col_array,
+    NULL,
+    descr_d, 0, NULL, NULL, NULL,
+    descr_c, c.data_array, c.row_array, c.col_array,
+    info, 
+    buffer
+  );
+
+  cudaDeviceSynchronize();
+
+  cusparseDestroyCsrgemm2Info(info);
+  cudaFree(buffer);
+
+}
+
+void cusparse_mutiplication(
+  const CSRMatrix<double>& a,
+  const CSRMatrix<double>& b,
+  int a_row,
+  int a_col,
+  int b_col,
+  int nnz_a,
+  int nnz_b,
+  CSRMatrix<double>& c
+) {
+
+  cusparseHandle_t handle;
+  cusparseMatDescr_t descr_a, descr_b, descr_c;
+  cusparseMatDescr_t descr_d = 0;
+  cusparseCreate(&handle);
+  cusparseCreateMatDescr(&descr_a);
+  cusparseCreateMatDescr(&descr_b);
+  cusparseCreateMatDescr(&descr_d);
+  cusparseCreateMatDescr(&descr_c);
+  cusparseSetMatType(descr_a, CUSPARSE_MATRIX_TYPE_GENERAL);
+  cusparseSetMatIndexBase(descr_a, CUSPARSE_INDEX_BASE_ZERO);
+  cusparseSetMatType(descr_b, CUSPARSE_MATRIX_TYPE_GENERAL);
+  cusparseSetMatIndexBase(descr_b, CUSPARSE_INDEX_BASE_ZERO);
+  cusparseSetMatType(descr_c, CUSPARSE_MATRIX_TYPE_GENERAL);
+  cusparseSetMatIndexBase(descr_c, CUSPARSE_INDEX_BASE_ZERO);
+
+  int base_c, nnz_c;
+  csrgemm2Info_t info = NULL;
+  size_t buffer_size;
+  void *buffer = NULL;
+  int *nnz = &nnz_c;
+  double alpha = 1.0;
   cusparseSetPointerMode(handle, CUSPARSE_POINTER_MODE_HOST);
   cusparseCreateCsrgemm2Info(&info);
   cusparseDcsrgemm2_bufferSizeExt(
@@ -202,7 +296,7 @@ void cusparse_mutiplication(
   }
 
   cudaMalloc(&c.col_array, sizeof(int) * nnz_c);
-  cudaMalloc(&c.data_array, sizeof(T) * nnz_c);
+  cudaMalloc(&c.data_array, sizeof(double) * nnz_c);
   cusparseDcsrgemm2(
     handle, a_row, a_col, b_col, &alpha,
     descr_a, nnz_a, a.data_array, a.row_array, a.col_array,
