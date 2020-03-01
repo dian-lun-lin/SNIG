@@ -18,6 +18,13 @@ Eigen::SparseVector<T> concatenate_by_row (
 );
 
 template<typename T>
+Eigen::SparseMatrix<T> CSR_matrix_to_eigen_sparse(
+  const CSRMatrix<T>& mat,
+  const size_t rows,
+  const size_t cols
+);
+
+template<typename T>
 void eigen_sparse_to_CSR_matrix(
     const Eigen::SparseMatrix<T, Eigen::RowMajor>& target,
     CSRMatrix<T>& mat 
@@ -157,7 +164,7 @@ Eigen::SparseMatrix<T> CSR_matrix_to_eigen_sparse(
   const size_t cols
 ) {
   Eigen::SparseMatrix<T> result(rows, cols);
-  result.reserve(rows / 200);
+  result.reserve(rows*cols / 1000);
   for(size_t i = 0; i < rows; ++i){
     for(size_t j = mat.row_array[i]; j < mat.row_array[i + 1]; ++j){
       result.coeffRef(i, mat.col_array[j]) =  mat.data_array[j];
@@ -170,8 +177,6 @@ Eigen::SparseMatrix<T> CSR_matrix_to_eigen_sparse(
 template<typename T>
 Eigen::SparseVector<T> get_score(const Eigen::SparseMatrix<T>& target){
 
-  //Eigen::SparseVector<T> score = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>
-    //(target).rowwise().sum().sparseView();
   Eigen::SparseVector<T> score = (target * Eigen::Matrix<T, Eigen::Dynamic, 1>::Ones(target.cols())).sparseView();
 
   score = score.unaryExpr([] (T a) {

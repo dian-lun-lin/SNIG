@@ -50,7 +50,7 @@ void tsv_string_to_CSR_matrix(
 );
 
 inline
-size_t nnz(const std::string& s);
+size_t count_nnz(const std::string& s);
 
 inline
 std::string read_file_to_string(const std::fs::path& path);
@@ -107,7 +107,7 @@ Eigen::SparseMatrix<T> tsv_string_to_matrix(
   typedef Eigen::Triplet<T> E;
   std::string line;
   std::vector<E> triplet_list;
-  triplet_list.reserve(rows / 200);
+  triplet_list.reserve(rows*cols / 1000);
   std::istringstream read_s(s);
 
   std::vector<std::string> tokens;
@@ -126,7 +126,7 @@ Eigen::SparseMatrix<T> tsv_string_to_matrix(
     ));
   }
 
-  Eigen::SparseMatrix<T, Eigen::RowMajor> mat(rows, cols);
+  Eigen::SparseMatrix<T> mat(rows, cols);
   mat.reserve(triplet_list.size());
   mat.setFromTriplets(triplet_list.begin(), triplet_list.end());
   return mat;
@@ -152,7 +152,7 @@ void tsv_string_to_CSR_matrix(
 }
 
 inline
-size_t nnz(const std::string& s){
+size_t count_nnz(const std::string& s){
   return std::count(s.begin(), s.end(), '\n');
 }
 
@@ -215,10 +215,12 @@ std::vector<Eigen::SparseMatrix<T> > read_weight(
     p /= "n" + std::to_string(num_neurons_per_layer) + "-l"
       + std::to_string(i + 1) + ".tsv";
     std::string data_str = read_file_to_string(p);
-    mats.push_back(tsv_string_to_matrix<T>(
+    mats.push_back(
+      tsv_string_to_matrix<T>(
           data_str,
           num_neurons_per_layer,
-          num_neurons_per_layer)
+          num_neurons_per_layer
+      )
     );
   }
   return mats;
