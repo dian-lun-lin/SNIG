@@ -4,6 +4,8 @@
 #include <Eigen/Sparse>
 #include <SparseDNN/utility/reader.hpp>
 #include <SparseDNN/utility/matrix_operation.hpp>
+#include <SparseDNN/utility/scoring.hpp>
+#include <Eigen/Dense>
 #include <vector>
 
 namespace std {
@@ -43,7 +45,7 @@ class Sequential {
     size_t num_layers() const { return _num_layers; };
     T bias() const { return _bias; };
 
-    Eigen::SparseMatrix<T> infer(
+    Eigen::Matrix<int, Eigen::Dynamic, 1> infer(
         const std::fs::path& input_path,
         const size_t num_input
     ) const;
@@ -76,7 +78,7 @@ Sequential<T>::~Sequential() {
 }
 
 template <typename T>
-Eigen::SparseMatrix<T> Sequential<T>::infer(
+Eigen::Matrix<int, Eigen::Dynamic, 1> Sequential<T>::infer(
   const std::fs::path& input_path,
   const size_t num_inputs
 ) const {
@@ -86,9 +88,9 @@ Eigen::SparseMatrix<T> Sequential<T>::infer(
   std::cout << "Done" << std::endl;
 
   std::cout << "Start inference............................" << std::flush;
- //issue how eigen overload assignment
-  Eigen::SparseMatrix<T> z;
+
   for(const auto& w : _weights){
+    Eigen::SparseMatrix<T> z(num_inputs, _num_neurons_per_layer);
     z = (y * w).pruned();
     z.coeffs() += _bias;
     y = z.unaryExpr([] (T a) {
@@ -99,9 +101,7 @@ Eigen::SparseMatrix<T> Sequential<T>::infer(
   }
   std::cout << "Done\n";
 
-  return get_score(y);
+  return get_score<T>(y);
 }
 }  // end of namespace sparse_dnn ----------------------------------------------
-
-
 
