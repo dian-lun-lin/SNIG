@@ -2,19 +2,19 @@
 #include <Eigen/Sparse>
 #include <vector>
 #include <SparseDNN/utility/matrix_format.h>
-
+#include <Eigen/Dense>
 
 namespace sparse_dnn {
 
 template<typename T>
-std::vector<Eigen::SparseMatrix<T, Eigen::RowMajor> > slice_by_row(
+std::vector<Eigen::SparseMatrix<T> > slice_by_row(
     const Eigen::SparseMatrix<T, Eigen::RowMajor>& target,
     const size_t num_slices
 );
 
-template<typename T>
-Eigen::SparseVector<T> concatenate_by_row (
-    const std::vector<Eigen::SparseVector<T> >& targets
+inline
+Eigen::Matrix<int, Eigen::Dynamic, 1> concatenate_by_row (
+    const std::vector<Eigen::Matrix<int, Eigen::Dynamic, 1> >& targets
 );
 
 template<typename T>
@@ -36,15 +36,13 @@ void eigen_sparse_to_CSR_array(
     SparseArray<T>& arr
 );
 
-template<typename T>
-Eigen::SparseVector<T> get_score(const Eigen::SparseMatrix<T>& target);
 
 //-----------------------------------------------------------------------------
 //Definition of reader function
 //-----------------------------------------------------------------------------
 
 template<typename T>
-std::vector<Eigen::SparseMatrix<T, Eigen::RowMajor> > slice_by_row(
+std::vector<Eigen::SparseMatrix<T> > slice_by_row(
     const Eigen::SparseMatrix<T, Eigen::RowMajor>& target,
     const size_t num_slices
 ) {
@@ -52,16 +50,15 @@ std::vector<Eigen::SparseMatrix<T, Eigen::RowMajor> > slice_by_row(
   size_t rows_per_slice = target.rows() / num_slices;
   size_t remain = target.rows() % num_slices;
 
-  std::vector<Eigen::SparseMatrix<T, Eigen::RowMajor> > slices;
+  std::vector<Eigen::SparseMatrix<T> > slices;
   slices.reserve(num_slices + 1);
   typedef Eigen::Triplet<T> E;
   std::vector<E> triplet_list;
-  Eigen::SparseMatrix<T, Eigen::RowMajor> tmp(rows_per_slice, target.cols());
 
-  triplet_list.reserve(rows_per_slice / 20);
+  triplet_list.reserve((rows_per_slice * target.cols()) / 1000);
   int counter = 0;
   for (int k = 0; k<target.outerSize(); ++k){
-    //issue T:float
+    Eigen::SparseMatrix<T> tmp(rows_per_slice, target.cols());
     for (typename Eigen::SparseMatrix<T, Eigen::RowMajor>::InnerIterator it(target, k); it;){
       if(it.row() < rows_per_slice * (counter + 1)){
         triplet_list.push_back(E(
@@ -75,19 +72,16 @@ std::vector<Eigen::SparseMatrix<T, Eigen::RowMajor> > slice_by_row(
       else{
         tmp.reserve(triplet_list.size());
         tmp.setFromTriplets(triplet_list.begin(), triplet_list.end());
-        tmp.makeCompressed();
         slices.push_back(tmp);
         ++counter;
-        tmp.resize(rows_per_slice, target.cols());
-        tmp.data().squeeze();
         triplet_list.clear();
       }
     }
   }
   //last one
+  Eigen::SparseMatrix<T> tmp(rows_per_slice, target.cols());
   tmp.reserve(triplet_list.size());
   tmp.setFromTriplets(triplet_list.begin(), triplet_list.end());
-  tmp.makeCompressed();
   slices.push_back(tmp);
 
   //issue: not test remain yet
@@ -99,27 +93,17 @@ std::vector<Eigen::SparseMatrix<T, Eigen::RowMajor> > slice_by_row(
 
 }
 
-template<typename T>
-Eigen::SparseVector<T> concatenate_by_row(
-    const std::vector<Eigen::SparseVector<T> >& targets
+inline
+Eigen::Matrix<int, Eigen::Dynamic, 1> concatenate_by_row (
+    const std::vector<Eigen::Matrix<int, Eigen::Dynamic, 1> >& targets
 ) {
 
-  size_t num_nonZeros{0};
-  size_t total_rows{0};
-  for(const auto& r:targets){
-    num_nonZeros += r.nonZeros();
-    total_rows += r.rows();
-  }
-  Eigen::SparseVector<T> score(total_rows);
-  score.reserve(num_nonZeros);
+  Eigen::Matrix<int, Eigen::Dynamic, 1> score((targets.size() - 1) * targets[0].rows() + targets.back().rows() , 1);
 
-  size_t lump_sum_rows{0};
-  for(size_t j = 0; j < targets.size(); ++j){
-    for(typename Eigen::SparseVector<T>::InnerIterator it(targets[j]); it; ++it){
-      score.coeffRef(lump_sum_rows + it.index()) =  it.value();
-    }
-    lump_sum_rows += targets[j].rows();
-  }
+  score.block(0, 0, targets[0].rows(), targets[0].cols())  = targets[0]; 
+  for(size_t i = 1; i < targets.size(); ++i){
+    score.block(i * targets[i - 1].rows(), 0, targets[i].rows(), targets[i].cols())  = targets[i]; 
+  } 
 
   return score;
 }
@@ -138,7 +122,7 @@ void eigen_sparse_to_CSR_matrix(
       mat.col_array[count] = it.col();
       mat.data_array[count++] = it.value();
     }
-  mat.row_array[j + 1] = count;
+    mat.row_array[j + 1] = count;
   }
   return;
 }
@@ -174,16 +158,5 @@ Eigen::SparseMatrix<T> CSR_matrix_to_eigen_sparse(
   return result;
 }
 
-template<typename T>
-Eigen::SparseVector<T> get_score(const Eigen::SparseMatrix<T>& target){
-
-  Eigen::SparseVector<T> score = (target * Eigen::Matrix<T, Eigen::Dynamic, 1>::Ones(target.cols())).sparseView();
-
-  score = score.unaryExpr([] (T a) {
-    if(a > 0) return 1;
-    else return 0;
-  });
-  return score;
-}
 
 }// end of namespace sparse_dnn ----------------------------------------------

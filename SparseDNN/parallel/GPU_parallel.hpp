@@ -1,7 +1,10 @@
+#pragma once
 #include<Eigen/Sparse>
 #include<SparseDNN/utility/reader.hpp>
 #include<SparseDNN/utility/matrix_operation.hpp>
 #include<SparseDNN/parallel/task.hpp>
+#include <SparseDNN/utility/scoring.hpp>
+#include <Eigen/Dense>
 
 namespace std{
   namespace fs = experimental::filesystem;
@@ -38,7 +41,7 @@ class GPUParallel{
     int num_layers() const { return _num_layers; };
     T bias() const { return _bias; };
 
-    Eigen::SparseVector<T> infer(
+    Eigen::Matrix<int, Eigen::Dynamic, 1> infer(
       const std::fs::path& input_path,
       const int num_inputs
     ) const;
@@ -93,13 +96,13 @@ GPUParallel<T>::~GPUParallel() {
 }
 
 template<typename T>
-Eigen::SparseVector<T> GPUParallel<T>::infer(
+Eigen::Matrix<int, Eigen::Dynamic, 1> GPUParallel<T>::infer(
   const std::fs::path& input_path,
   const int num_inputs
 ) const {
 
-  int num_threads_per_block = 512;
-  int num_blocks_per_grid = 256;
+  int num_threads_per_block = 1024;
+  int num_blocks_per_grid = 512;
 
   std::cout << "Reading input.............................." << std::flush;
   std::string data_str = read_file_to_string(input_path);
@@ -142,7 +145,6 @@ Eigen::SparseVector<T> GPUParallel<T>::infer(
     cusparse_mutiplication(d_y, d_w, num_inputs, _num_neurons_per_layer, _num_neurons_per_layer, y_nnz, w_nnz, d_z);
 
     cudaMemcpy(y.row_array, d_z.row_array, sizeof(int) * (num_inputs + 1), cudaMemcpyDeviceToHost);
-
     delete [] y.col_array;
     delete [] y.data_array;
     y.col_array = new int[y.row_array[num_inputs]];
@@ -163,17 +165,21 @@ Eigen::SparseVector<T> GPUParallel<T>::infer(
     cudaFree(d_w.data_array);
   }
   
-  auto tmp = CSR_matrix_to_eigen_sparse(y, num_inputs, _num_neurons_per_layer);
 
   cudaFree(d_z.row_array);
   cudaFree(d_y.row_array);
   cudaFree(d_w.row_array);
 
+
+  auto score = get_score(y, num_inputs);
+
   delete [] y.row_array;
   delete [] y.col_array;
   delete [] y.data_array;
 
-  return get_score(tmp);
+  return score;
+
+
 }
 
 }// end of namespace sparse_dnn ----------------------------------------------

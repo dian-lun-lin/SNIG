@@ -3,6 +3,8 @@
 
 #include <SparseDNN/SparseDNN.hpp>
 #include <SparseDNN/utility/reader.hpp>
+#include <SparseDNN/utility/scoring.hpp>
+#include <Eigen/Dense>
 
 namespace std {
   namespace fs = experimental::filesystem;
@@ -23,7 +25,7 @@ int main(int argc, char* argv[]) {
     mode, 
     "select mode(sequential/CPU_parallel), default is sequential");
 
-  std::fs::path weight_path;
+  std::fs::path weight_path("../sample_data/weight/neuron1024/");
   app.add_option("-w, --weight", weight_path, "weight directory path")
     ->check(CLI::ExistingDirectory);
 
@@ -45,14 +47,14 @@ int main(int argc, char* argv[]) {
   app.add_option("-b, --bias", bias, "bias");
 
   //for testing
-  std::fs::path input_path("/home/dian-lun/dian/GraphChallenge_SparseDNN/dataset/MNIST/sparse-images-1024.tsv");
+  std::fs::path input_path("../sample_data/MNIST/sparse-images-1024.tsv");
   app.add_option(
       "--input",
       input_path, 
       "input tsv file path, default is 1024"
   );
 
-  std::fs::path golden_path("/home/dian-lun/dian/GraphChallenge_SparseDNN/dataset/MNIST/neuron1024-l120-categories.tsv");
+  std::fs::path golden_path("../sample_data/MNIST/neuron1024-l120-categories.tsv");
   app.add_option(
       "--golden",
       golden_path, 
@@ -62,7 +64,7 @@ int main(int argc, char* argv[]) {
   CLI11_PARSE(app, argc, argv);
 
   //Data parallel mode
-  Eigen::SparseVector<float> result;
+  Eigen::Matrix<int, Eigen::Dynamic, 1> result;
   if(mode == "CPU_parallel"){
     sparse_dnn::CPUParallel<float> cpu_parallel(
         weight_path,
@@ -83,8 +85,8 @@ int main(int argc, char* argv[]) {
     result = sequential.infer(input_path, 60000);
   }
 
-  auto golden = sparse_dnn::read_golden<float>(golden_path, 60000);
-  if(sparse_dnn::is_passed<float>(result, golden)){
+  auto golden = sparse_dnn::read_golden(golden_path, 60000);
+  if(sparse_dnn::is_passed(result, golden)){
     std::cout << "CHALLENGE PASSED\n";
   }
   else{

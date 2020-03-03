@@ -4,7 +4,7 @@
 #include <SparseDNN/utility/matrix_format.h>
 #include <cusparse_v2.h>
 #include <algorithm>
-#include<type_traits>
+#include <thrust/scan.h>
 
 #define gpu_err_check(ans) { gpu_assert((ans), __FILE__, __LINE__); }
 
@@ -331,10 +331,14 @@ void add_bias_relu_CPU(T* arr, T bias, int rows){
 
 template <typename T>
 __global__
-void add_bias(T* arr, int nnz, T bias){
+void add_bias(T* arr, int* nnz, T bias){
+  int batch = (*nnz + blockDim.x * gridDim.x - 1) / (blockDim.x * gridDim.x);
   int index = blockIdx.x * blockDim.x + threadIdx.x;
-  if(index < nnz){
-    arr[index] += bias;
+
+  for(int i = index; i < index + blockDim.x * batch; i += blockDim.x){
+    if(i < *nnz){
+      arr[index] += bias;
+    }
   }
 } 
 
@@ -342,8 +346,7 @@ template <typename T>
 void resize_CPU(CSRMatrix<T>& target, int rows) {
 
   int nnz = target.row_array[rows - 1];
-  int reduce_arr[rows];
-  for(int j = 0; j < rows; ++j){ reduce_arr[j] = 0;}
+  int reduce_arr[rows] = {0};
 
   for(int i = 0; i < nnz; ++i){
     if(target.data_array[i] == 0){
@@ -359,7 +362,7 @@ void resize_CPU(CSRMatrix<T>& target, int rows) {
     }
   }
 
-  std::partial_sum(reduce_arr, reduce_arr + rows, reduce_arr);
+  thrust::inclusive_scan(reduce_arr, reduce_arr + rows, reduce_arr);
   for(int k = 0; k < rows; ++k){
     target.row_array[k] -= reduce_arr[k];
   }

@@ -3,6 +3,8 @@
 #include <SparseDNN/utility/reader.hpp>
 #include <SparseDNN/utility/matrix_operation.hpp>
 #include <SparseDNN/utility/thread_pool.hpp>
+#include <SparseDNN/utility/scoring.hpp>
+#include <Eigen/Dense>
 
 #include <vector>
 
@@ -30,8 +32,8 @@ class CPUParallel {
     const size_t _num_layers;
     const T _bias;
 
-    Eigen::SparseVector<T> _data_parallel_task(
-        const Eigen::SparseMatrix<T, Eigen::RowMajor>& y
+    Eigen::Matrix<int, Eigen::Dynamic, 1> _data_parallel_task(
+        Eigen::SparseMatrix<T> y
     ) const;
 
   public:
@@ -49,7 +51,7 @@ class CPUParallel {
     size_t num_layers() const { return _num_layers; };
     T bias() const { return _bias; };
 
-    Eigen::SparseVector<T> infer(
+    Eigen::Matrix<int, Eigen::Dynamic, 1> infer(
       const std::fs::path& input_path,
       const size_t num_inputs
       ) const;
@@ -83,7 +85,7 @@ CPUParallel<T>::~CPUParallel(){
 }
 
 template<typename T>
-Eigen::SparseVector<T> CPUParallel<T>::infer(
+Eigen::Matrix<int, Eigen::Dynamic, 1> CPUParallel<T>::infer(
   const std::fs::path& input_path,
   const size_t num_inputs
 ) const {
@@ -101,7 +103,7 @@ Eigen::SparseVector<T> CPUParallel<T>::infer(
 
   auto slicing_inputs = slice_by_row<T>(input, num_tasks);
 
-  std::vector<std::future<Eigen::SparseVector<T> > > futures;
+  std::vector<std::future<Eigen::Matrix<int, Eigen::Dynamic, 1> > > futures;
   futures.reserve(num_tasks + 1);
 
   for(const auto& each_input:slicing_inputs){
@@ -116,35 +118,32 @@ Eigen::SparseVector<T> CPUParallel<T>::infer(
     f.wait();
   }
 
-  std::vector<Eigen::SparseVector<T> > get_results;
+  std::vector<Eigen::Matrix<int, Eigen::Dynamic, 1> > get_results;
   get_results.reserve(futures.size());
   for(auto& f:futures){
     get_results.push_back(f.get());
   }
 
-  auto score = concatenate_by_row<T>(get_results);
-
-  return score;
+  return concatenate_by_row(get_results);
 }
 
 template<typename T>
-Eigen::SparseVector<T> CPUParallel<T>::_data_parallel_task(
-    const Eigen::SparseMatrix<T, Eigen::RowMajor>& y
+Eigen::Matrix<int, Eigen::Dynamic, 1> CPUParallel<T>::_data_parallel_task(
+    Eigen::SparseMatrix<T> y
 ) const {
 
-  Eigen::SparseMatrix<T, Eigen::RowMajor> z;
-  Eigen::SparseMatrix<T, Eigen::RowMajor> tmp{y};
+  Eigen::SparseMatrix<T> z;
   for(const auto& w:_weights){
-    z = (tmp * w).pruned();
+    z = (y * w).pruned();
     z.coeffs() += _bias;
-    tmp = z.unaryExpr([] (T a) {
+    y = z.unaryExpr([] (T a) {
      if(a < 0) return T(0);
      else if(a > 32) return T(32);
      return a;
      });
   }
 
-  return get_score<T>(tmp);
+  return get_score<T>(y);
 }
 
 }//end of namespace sparse_dnn ----------------------------------------------

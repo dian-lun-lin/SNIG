@@ -82,11 +82,6 @@ Eigen::SparseVector<T> read_golden(
 );
 
 
-template <typename T>
-bool is_passed(
-    const Eigen::SparseMatrix<T>& output,
-    const Eigen::SparseMatrix<T>& golden
-);
 
 //-----------------------------------------------------------------------------
 //Definition of reader function
@@ -148,7 +143,6 @@ void tsv_string_to_CSR_matrix(
 
   Eigen::SparseMatrix<T, Eigen::RowMajor> eigen_mat = tsv_string_to_matrix<T>(s, rows, cols);
   eigen_sparse_to_CSR_matrix<T>(eigen_mat, mat);
-  return;
 }
 
 inline
@@ -189,7 +183,6 @@ void tsv_string_to_CSC_matrix(
     mat.data_array[count_nnz++] = to_numeric<T>(tokens[2]);
   }
   std::partial_sum(mat.col_array, mat.col_array + cols + 1, mat.col_array);
-  return;
 }
 
 
@@ -243,26 +236,19 @@ Eigen::SparseMatrix<T> read_input(
   return tsv_string_to_matrix<T>(input_str, num_inputs, num_features);
 }
 
-template <typename T>
-Eigen::SparseVector<T> read_golden(
+inline
+Eigen::Matrix<int, Eigen::Dynamic, 1> read_golden(
     const std::fs::path& golden_path,
     const size_t num_inputs
 ) {
 
-  //T is the floating posize_t type, either float or double
-  static_assert(
-      std::is_same<T, float>::value || std::is_same<T, double>::value,
-      "data type must be either float or double"
-      );
-
   std::string line;
   std::istringstream read_s(read_file_to_string(golden_path));
-  Eigen::SparseVector<T> mat(num_inputs, 1);
-  mat.reserve(num_inputs / 200);
+  Eigen::Matrix<int, Eigen::Dynamic, 1> golden(num_inputs, 1);
   while(std::getline(read_s, line)) {
-    mat.insert(std::stoi(line) - 1) = 1;
+    golden(std::stoi(line) - 1, 0) = 1;
   }   
-  return mat;
+  return golden;
 }
 
 inline
@@ -295,17 +281,5 @@ void write_file_from_string(
 	f.write(&s[0], std::fs::file_size(path));
 }
 
-template <typename T>
-bool is_passed(
-    const Eigen::SparseMatrix<T>& output,
-    const Eigen::SparseMatrix<T>& golden
-){
-  Eigen::SparseMatrix<T> diff_mat = golden - output;
-  diff_mat = diff_mat.pruned();
-  if(!diff_mat.nonZeros())
-    return true;
-  else
-    return false;
-}
 
 } // end of namespace sparse_dnn-----------------------------------------------
