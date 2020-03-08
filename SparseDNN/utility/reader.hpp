@@ -32,7 +32,8 @@ template <typename T>
 Eigen::SparseMatrix<T> tsv_string_to_matrix(
   const std::string& s,
   const size_t rows,
-  const size_t cols
+  const size_t cols,
+  const size_t nnz
 );
 
 template <typename T>
@@ -46,7 +47,26 @@ template <typename T>
 void tsv_string_to_CSR_matrix(
     const std::string& s,
     const size_t rows,
+    const size_t nnz,
     CSRMatrix<T>& mat
+);
+
+template <typename T>
+void tsv_string_to_2D_array(
+    const std::string& s,
+    const size_t cols,
+    T* arr
+);
+
+template <typename T>
+void tsv_string_to_CSR_packed_array(
+    const std::string& s,
+    const size_t rows,
+    const size_t cols,
+    const size_t nnz,
+    const int COL_BLK,
+    const int N_SLAB,
+    int* arr
 );
 
 inline
@@ -62,10 +82,28 @@ void write_file_from_string(
 );
     
 template <typename T>
+void read_weight(
+    const std::string& s,
+    const size_t num_neurons_per_layer,
+    const size_t nnz,
+    CSRMatrix<T>& mat
+);
+
+template <typename T>
+void read_weight(
+    const size_t num_neurons_per_layer,
+    const size_t nnz_per_layer,
+    const size_t num_layers,
+    const int COL_BLK,
+    const int N_SLAB,
+    int* arr
+);
+
+template <typename T>
 std::vector<Eigen::SparseMatrix<T> > read_weight(
     const std::fs::path& weight_path,
     const size_t num_neurons_per_layer,
-    const size_t num_layers=1024
+    const size_t num_layers
 );
 
 template <typename T>
@@ -73,6 +111,25 @@ Eigen::SparseMatrix<T> read_input(
     const std::fs::path& input_path,
     const size_t num_inputs,
     const size_t num_features
+);
+
+template <typename T>
+Eigen::SparseMatrix<T> read_input(
+    const std::string& s,
+    const size_t num_inputs,
+    const size_t num_features,
+    const size_t nnz,
+    CSRMatrix<T>& mat
+);
+
+template<typename T>
+void read_input(
+    const std::fs::path& input_path,
+    const size_t num_inputs,
+    const size_t num_neurons_per_layer,
+    T* arr,
+    int* non_empty_rows,
+    int& num_non_empty_rows
 );
 
 template <typename T>
@@ -91,7 +148,8 @@ template <typename T>
 Eigen::SparseMatrix<T> tsv_string_to_matrix(
     const std::string& s,
     const size_t rows,
-    const size_t cols
+    const size_t cols,
+    const size_t nnz
 ) {
   //T is the floating posize_t type, either float or double
   static_assert(
@@ -102,9 +160,8 @@ Eigen::SparseMatrix<T> tsv_string_to_matrix(
   typedef Eigen::Triplet<T> E;
   std::string line;
   std::vector<E> triplet_list;
-  triplet_list.reserve(rows*cols / 1000);
+  triplet_list.reserve(nnz);
   std::istringstream read_s(s);
-
   std::vector<std::string> tokens;
 
   while(std::getline(read_s, line)){
@@ -127,12 +184,42 @@ Eigen::SparseMatrix<T> tsv_string_to_matrix(
   return mat;
 }
 
-//not able to transform directly
+//issue:doesnt't check boundary
+template <typename T>
+void tsv_string_to_2D_array(
+    const std::string& s,
+    const size_t cols,
+    T* arr
+){
+  //T is the floating posize_t type, either float or double
+  static_assert(
+      std::is_same<T, float>::value || std::is_same<T, double>::value,
+      "data type must be either float or double"
+      );
+
+  std::string line;
+  std::istringstream read_s(s);
+
+  std::vector<std::string> tokens;
+
+  while(std::getline(read_s, line)){
+    std::istringstream lineStream(line);
+    std::string token;
+    tokens.clear();
+    while(std::getline(lineStream, token, '\t')) {
+       tokens.push_back(token);
+    }
+    arr[(std::stoi(tokens[0]) - 1) * cols + std::stoi(tokens[1]) - 1] = to_numeric<T>(tokens[2]);
+  }
+
+}
+
 template <typename T>
 void tsv_string_to_CSR_matrix(
     const std::string& s,
     const size_t rows,
     const size_t cols,
+    const size_t nnz,
     CSRMatrix<T>& mat
 ) {
   //T is the floating posize_t type, either float or double
@@ -140,9 +227,60 @@ void tsv_string_to_CSR_matrix(
       std::is_same<T, float>::value || std::is_same<T, double>::value,
       "data type must be either float or double"
       );
+  Eigen::SparseMatrix<T, Eigen::RowMajor> eigen_mat = tsv_string_to_matrix<T>(s, rows, cols, nnz);
 
-  Eigen::SparseMatrix<T, Eigen::RowMajor> eigen_mat = tsv_string_to_matrix<T>(s, rows, cols);
-  eigen_sparse_to_CSR_matrix<T>(eigen_mat, mat);
+  std::copy(eigen_mat.outerIndexPtr(), eigen_mat.outerIndexPtr() + rows + 1, mat.row_array);
+  std::copy(eigen_mat.innerIndexPtr(), eigen_mat.innerIndexPtr() + nnz, mat.col_array);
+  std::copy(eigen_mat.valuePtr(), eigen_mat.valuePtr() + nnz, mat.data_array);
+}
+
+template <typename T>
+void tsv_string_to_CSR_packed_array(
+    const std::string& s,
+    const size_t rows,
+    const size_t cols,
+    const size_t nnz,
+    const int COL_BLK,
+    const int N_SLAB,
+    int* arr
+) {
+  //T is the floating posize_t type, either float or double
+  static_assert(
+      std::is_same<T, float>::value || std::is_same<T, double>::value,
+      "data type must be either float or double"
+      );
+  typedef Eigen::Triplet<T> E;
+  std::string line;
+  std::vector<E> triplet_list;
+  triplet_list.reserve(nnz);
+  std::istringstream read_s(s);
+  std::vector<std::string> tokens;
+
+  while(std::getline(read_s, line)){
+    std::istringstream lineStream(line);
+    std::string token;
+    tokens.clear();
+    while(std::getline(lineStream, token, '\t')) {
+       tokens.push_back(token);
+    }
+    triplet_list.push_back(E(
+      std::stoi(tokens[0]) - 1 + 
+      rows * ((std::stoi(tokens[1]) - 1) / COL_BLK),
+      std::stoi(tokens[1]) - 1,
+      to_numeric<T>(tokens[2])
+    ));
+  }
+
+  Eigen::SparseMatrix<T> eigen_mat(rows * N_SLAB, cols);
+  eigen_mat.reserve(triplet_list.size());
+  eigen_mat.setFromTriplets(triplet_list.begin(), triplet_list.end());
+
+  std::copy(eigen_mat.outerIndexPtr(), eigen_mat.outerIndexPtr() + rows * N_SLAB + 1, arr);
+  std::copy(eigen_mat.innerIndexPtr(), eigen_mat.innerIndexPtr() + nnz, arr + rows * N_SLAB + 1);
+  T* tmp = reinterpret_cast<T*>(arr + rows * N_SLAB + 1 + nnz);
+  for(int i = 0; i < nnz; ++i){
+    tmp[i] = *(eigen_mat.valuePtr() + i);
+  }
 }
 
 inline
@@ -212,11 +350,41 @@ std::vector<Eigen::SparseMatrix<T> > read_weight(
       tsv_string_to_matrix<T>(
           data_str,
           num_neurons_per_layer,
-          num_neurons_per_layer
+          num_neurons_per_layer,
+          count_nnz(data_str)
       )
     );
   }
   return mats;
+}
+template <typename T>
+void read_weight(
+    const std::string& s,
+    const size_t num_neurons_per_layer,
+    const size_t nnz,
+    CSRMatrix<T>& mat
+) {
+ tsv_string_to_CSR_matrix(s, num_neurons_per_layer, num_neurons_per_layer, nnz, mat);
+}
+
+template <typename T>
+void read_weight(
+    const std::fs::path& weight_path,
+    const size_t num_neurons_per_layer,
+    const size_t nnz_per_layer,
+    const size_t num_layers,
+    const int COL_BLK,
+    const int N_SLAB,
+    int* arr
+) {
+  for(int i = 0; i < num_layers; ++i){
+    std::fs::path p = weight_path;
+    p /= "n" + std::to_string(num_neurons_per_layer) + "-l"
+      + std::to_string(i + 1) + ".tsv";
+    std::string data_str = read_file_to_string(p);
+//issue: double right?
+    tsv_string_to_CSR_packed_array<T>(data_str, num_neurons_per_layer, num_neurons_per_layer, nnz_per_layer, COL_BLK, N_SLAB, arr + i * (num_neurons_per_layer * N_SLAB + 1 + nnz_per_layer + ((sizeof(T) / sizeof(int)) * nnz_per_layer)));
+  }
 }
 
 template<typename T>
@@ -233,7 +401,40 @@ Eigen::SparseMatrix<T> read_input(
       );
 
   std::string input_str = read_file_to_string(input_path);
-  return tsv_string_to_matrix<T>(input_str, num_inputs, num_features);
+  return tsv_string_to_matrix<T>(input_str, num_inputs, num_features, count_nnz(input_str));
+}
+
+template<typename T>
+void read_input(
+    const std::fs::path& input_path,
+    const size_t num_inputs,
+    const size_t num_neurons_per_layer,
+    T* arr,
+    int* non_empty_rows,
+    int& num_non_empty_rows
+) {
+  std::string input_str = read_file_to_string(input_path);
+  tsv_string_to_2D_array<T>(input_str, num_neurons_per_layer, arr);
+  int counter = 0;
+  T* it;
+  for(int i = 0; i < num_inputs; ++i){
+    it = std::find_if(arr + i * num_neurons_per_layer, arr + (i + 1) * num_neurons_per_layer, [](T v){ return v != 0;});
+    if(it != (arr + (i + 1) * num_neurons_per_layer)){
+      non_empty_rows[counter++] = i;
+    }
+  }
+  num_non_empty_rows = counter;
+}
+
+template <typename T>
+Eigen::SparseMatrix<T> read_input(
+    const std::string& s,
+    const size_t num_inputs,
+    const size_t num_features,
+    const size_t nnz,
+    CSRMatrix<T>& mat
+) {
+  tsv_string_to_CSR_matrix<T>(s, num_inputs, num_features, nnz, mat);
 }
 
 inline

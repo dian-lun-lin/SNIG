@@ -18,7 +18,7 @@ int main(int argc, char* argv[]) {
 
   // usage: ./main -m sequential 
   //        ./main -m CPU_parallel
-  //        ./main -m GPU_parallel
+  //        ./main -m GPU_cusparse
   CLI::App app{"SparseDNN"};
   std::string mode = "sequential";
   app.add_option("-m, --mode", 
@@ -61,14 +61,29 @@ int main(int argc, char* argv[]) {
       "golden tsv file path, default is 1024/120"
   );
   CLI11_PARSE(app, argc, argv);
+  Eigen::Matrix<int, Eigen::Dynamic, 1> result;
   //Data parallel mode
-  sparse_dnn::GPUParallel<float> GPU_parallel(
-      weight_path,
+  if(mode == "GPU_cusparse"){
+    sparse_dnn::GPUCusparse<float> GPU_cusparse(
+      weight_path, 
       bias,
-      num_neurons_per_layer,
+      num_neurons_per_layer, 
       num_layers
-      );
-  auto result = GPU_parallel.infer(input_path, 60000);
+    );
+    result = GPU_cusparse.infer(input_path, 60000);
+  }
+  else if(mode == "GPU_baseline"){
+
+    sparse_dnn::GPUBaseline<float> GPU_baseline(
+      weight_path, 
+      bias,
+      num_neurons_per_layer, 
+      num_neurons_per_layer * 32,
+      num_layers,
+      8192
+    );
+    result = GPU_baseline.infer(input_path, 60000);
+  }
   auto golden = sparse_dnn::read_golden(golden_path, 60000);
   if(sparse_dnn::is_passed(result, golden)){
     std::cout << "CHALLENGE PASSED\n";

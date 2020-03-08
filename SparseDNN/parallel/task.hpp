@@ -51,6 +51,7 @@ void check_nnz(
   const T* bias
 );
 
+inline
 void cusparse_mutiplication(
   const CSRMatrix<float>& a,
   const CSRMatrix<float>& b,
@@ -62,6 +63,7 @@ void cusparse_mutiplication(
   CSRMatrix<float>& c
 );
 
+inline
 void cusparse_mutiplication(
   const CSRMatrix<double>& a,
   const CSRMatrix<double>& b,
@@ -83,6 +85,22 @@ void resize_CPU(CSRMatrix<T>& target, int rows);
 template <typename T>
 void add_bias_relu_CPU(T* arr, T bias, int rows);
 
+template <typename T>
+__global__ 
+void baseline_inference(
+  const T* Y0,
+  const int nerowsY,
+  const int* rowsY0,
+  int* rlenY0,
+  const int COL_BLK,
+  const int N_SLAB,
+  const int num_neurons_per_layer,
+  const int nnz_per_layer,
+  const int* W,
+  const T bias,
+  T* Y1,
+  int* rlenY1
+);
 
 //-----------------------------------------------------------------------------
 //Definition of task function
@@ -148,8 +166,8 @@ void CSR_mutiply_CSC(
   }
 }
 
-void
-cusparse_mutiplication(
+inline
+void cusparse_mutiplication(
   const CSRMatrix<float>& a,
   const CSRMatrix<float>& b,
   int a_row,
@@ -232,6 +250,7 @@ cusparse_mutiplication(
 
 }
 
+inline
 void cusparse_mutiplication(
   const CSRMatrix<double>& a,
   const CSRMatrix<double>& b,
@@ -346,7 +365,8 @@ template <typename T>
 void resize_CPU(CSRMatrix<T>& target, int rows) {
 
   int nnz = target.row_array[rows - 1];
-  int reduce_arr[rows] = {0};
+  int reduce_arr[rows];
+  std::memset(reduce_arr, 0, sizeof(int) * rows);
 
   for(int i = 0; i < nnz; ++i){
     if(target.data_array[i] == 0){
@@ -369,6 +389,68 @@ void resize_CPU(CSRMatrix<T>& target, int rows) {
 
   std::remove(target.data_array, target.data_array + nnz, 0);
   std::remove(target.col_array, target.col_array + nnz, -1);
+}
+
+template <typename T>
+__global__ 
+void baseline_inference(
+  const T* Y0,
+  const int nerowsY,
+  const int* rowsY0,
+  int* rlenY0,
+  const int COL_BLK,
+  const int N_SLAB,
+  const int num_neurons_per_layer,
+  const int nnz_per_layer,
+  int* W,
+  const T bias,
+  T* Y1,
+  int* rlenY1
+) {
+  extern  __shared__ float shRow[];
+
+  if(blockIdx.x >= nerowsY){
+    return;
+  }
+  int tid = threadIdx.y * blockDim.x + threadIdx.x;
+  int rid = rowsY0[blockIdx.x];
+  T valY;
+  __syncthreads();
+  if(tid == 0){
+    rlenY0[rid] = 0;
+    rlenY1[rid] = 0;
+  }
+  for(int i = 0; i < N_SLAB; i++){
+    __syncthreads();
+    for(int j = threadIdx.x; j < COL_BLK; j++){
+      shRow[j] = 0;  
+    }
+    __syncthreads();
+    for(int j = threadIdx.y; j < num_neurons_per_layer; j += blockDim.y){
+      valY = Y0[rid * num_neurons_per_layer + j];
+      if(valY == 0){
+        continue;
+      }
+      int begOffW = W[i * num_neurons_per_layer + j] + threadIdx.x;
+      int endOffW = W[i * num_neurons_per_layer + j + 1];
+      for(int k = begOffW; k < endOffW; k += blockDim.x){
+        int colW = W[num_neurons_per_layer * N_SLAB + 1 + k];
+        T valW = reinterpret_cast<T*>(W + num_neurons_per_layer * N_SLAB + 1 + nnz_per_layer)[k];
+        atomicAdd(&shRow[colW - i * COL_BLK], valY * valW);
+      }
+    }
+    __syncthreads();
+    int count = 0;
+    for(int j = 0; j < COL_BLK; j += blockDim.x * blockDim.y){
+      T v = (j + tid < COL_BLK) ? shRow[j + tid] + bias : -1;
+      count += __syncthreads_count(v > 0);
+      Y1[rid * num_neurons_per_layer + i * COL_BLK + j + tid] = min(T(32), max(T(0), v));
+    }
+    if(tid == 0){
+      rlenY1[rid] += count;
+    }
+  }
+
 }
 
 }// end of namespace sparse_dnn ----------------------------------------------

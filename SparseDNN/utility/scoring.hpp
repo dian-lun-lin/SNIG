@@ -8,9 +8,19 @@ namespace sparse_dnn {
 template<typename T>
 Eigen::Matrix<int, Eigen::Dynamic, 1> get_score(const Eigen::SparseMatrix<T>& target);
 
-template<typename T>
-Eigen::Matrix<int, Eigen::Dynamic, 1> get_score(const CSRMatrix<T>& target, const int rows);
 
+template<typename T>
+Eigen::Matrix<int, Eigen::Dynamic, 1> get_score(
+  const CSRMatrix<T>& target,
+  const int rows
+);
+
+template<typename T>
+Eigen::Matrix<int, Eigen::Dynamic, 1> get_score(
+  const T* arr,
+  const int rows,
+  const int cols
+);
 
 inline
 bool is_passed(
@@ -57,6 +67,20 @@ bool is_passed(
     const Eigen::Matrix<int, Eigen::Dynamic, 1>& golden
 ) {
   return (output.cwiseEqual(golden).count());
+}
+
+template<typename T>
+Eigen::Matrix<int, Eigen::Dynamic, 1> get_score(
+  const T* arr,
+  const int rows,
+  const int cols
+){
+  Eigen::Matrix<int, Eigen::Dynamic, 1> score(rows, 1);
+  for(int i = 0; i < rows; ++i){
+    T sum = std::accumulate(arr + i * cols, arr + (i+1) * cols, 0);
+    score(i, 0) = sum > 0 ? 1 : 0;
+  }
+  return score;
 }
 
 }// end of namespace sparse_dnn ----------------------------------------------
