@@ -1,5 +1,5 @@
 #pragma once
-#include<Eigen/Sparse>
+#include<Eigen/SparseCore>
 #include<SparseDNN/utility/reader.hpp>
 #include<SparseDNN/utility/matrix_operation.hpp>
 #include<SparseDNN/parallel/task.hpp>
@@ -12,7 +12,7 @@ namespace std{
 
 namespace sparse_dnn {
 template <typename T>
-class GPUParallel{
+class GPUCusparse{
     
   static_assert(
   std::is_same<T, float>::value || std::is_same<T, double>::value,
@@ -28,14 +28,14 @@ class GPUParallel{
     
   public:
 
-    GPUParallel(
+    GPUCusparse(
       const std::fs::path& weight_path,
       const T bias,
       const int num_neurons_per_layer=1024,
       const int num_layers=120 
     );
 
-    ~GPUParallel();
+    ~GPUCusparse();
 
     int num_neurons_per_layer() const { return _num_neurons_per_layer; };
     int num_layers() const { return _num_layers; };
@@ -50,11 +50,11 @@ class GPUParallel{
 };
 
 // ----------------------------------------------------------------------------
-// Definition of GPUParallel
+// Definition of GPUCusparse
 // ----------------------------------------------------------------------------
 
 template<typename T>
-GPUParallel<T>::GPUParallel(
+GPUCusparse<T>::GPUCusparse(
   const std::fs::path& weight_path,
   const T bias,
   const int num_neurons_per_layer,
@@ -78,7 +78,7 @@ GPUParallel<T>::GPUParallel(
     weight.row_array = new int[num_neurons_per_layer + 1];
     weight.col_array = new int[nnz];
     weight.data_array = new T[nnz];
-    tsv_string_to_CSR_matrix<T>(data_str, num_neurons_per_layer, num_neurons_per_layer, weight);
+    read_weight<T>(data_str, num_neurons_per_layer, nnz, weight);
     _weights.push_back(weight);
   }
 
@@ -86,17 +86,18 @@ GPUParallel<T>::GPUParallel(
 }
 
 template<typename T>
-GPUParallel<T>::~GPUParallel() {
+GPUCusparse<T>::~GPUCusparse() {
 
   for(auto& w:_weights){
     delete[] w.row_array;
     delete[] w.col_array;
     delete[] w.data_array;
   }
+
 }
 
 template<typename T>
-Eigen::Matrix<int, Eigen::Dynamic, 1> GPUParallel<T>::infer(
+Eigen::Matrix<int, Eigen::Dynamic, 1> GPUCusparse<T>::infer(
   const std::fs::path& input_path,
   const int num_inputs
 ) const {
@@ -111,7 +112,7 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUParallel<T>::infer(
   y.row_array = new int[num_inputs + 1];
   y.col_array = new int[y_nnz];
   y.data_array = new T[y_nnz];
-  tsv_string_to_CSR_matrix<T>(data_str, num_inputs, _num_neurons_per_layer, y);
+  read_input<T>(data_str, num_inputs, _num_neurons_per_layer, y_nnz, y);
   std::cout << "Done\n";
 
   std::cout << "Start inference............................" << std::flush;
