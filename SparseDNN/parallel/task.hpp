@@ -6,50 +6,15 @@
 #include <algorithm>
 #include <thrust/scan.h>
 
-#define gpu_err_check(ans) { gpu_assert((ans), __FILE__, __LINE__); }
-
-inline void gpu_assert(cudaError_t code, const char *file, int line, bool abort=true)
-{
-   if (code != cudaSuccess) 
-   {
-      fprintf(stderr,"GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
-      if (abort) exit(code);
-   }
-}
 namespace sparse_dnn{
 
-
-template<typename T>
-__global__
-void CSR_mutiply_CSC(
-  const size_t* y_n_rows,
-  const size_t* y_row_array,
-  const size_t* y_col_array,
-  const T* y_data_array,
-  const size_t* w_n_cols,
-  const size_t* w_col_array,
-  const size_t* w_row_array,
-  const T* w_data_array,
-  size_t* result_row_array,
-  size_t* result_col_array,
-  T* result_data_array,
-  const T* bias
-);
-
-template<typename T>
-__global__
-void check_nnz(
-  const size_t* y_n_rows,
-  const size_t* y_row_array,
-  const size_t* y_col_array,
-  const size_t* y_data_array,
-  const size_t* w_n_cols,
-  const size_t* w_col_array,
-  const size_t* w_row_array,
-  const size_t* w_data_array,
-  size_t* result_row_array,
-  const T* bias
-);
+struct HostFuncArgs{
+  int num_inputs;
+  int* cur_layer;
+  int* nerowsY;
+  int** rlenY;
+  int** rowsY;
+};
 
 inline
 void cusparse_mutiplication(
@@ -84,7 +49,6 @@ void resize_CPU(CSRMatrix<T>& target, int rows);
 
 template <typename T>
 void add_bias_relu_CPU(T* arr, T bias, int rows);
-
 template <typename T>
 __global__ 
 void baseline_inference(
@@ -95,75 +59,38 @@ void baseline_inference(
   const int COL_BLK,
   const int N_SLAB,
   const int num_neurons_per_layer,
-  const int nnz_per_layer,
-  const int* W,
+  const int* roffW,
+  const int* colsW,
+  const T* valsW,
   const T bias,
   T* Y1,
   int* rlenY1
 );
 
+
 //-----------------------------------------------------------------------------
 //Definition of task function
 //-----------------------------------------------------------------------------
 
-
-template<typename T>
-__global__
-void CSR_mutiply_CSC(
-  const size_t* y_n_rows,
-  const size_t* y_row_array,
-  const size_t* y_col_array,
-  const T* y_data_array,
-  const size_t* w_n_cols,
-  const size_t* w_col_array,
-  const size_t* w_row_array,
-  const T* w_data_array,
-  size_t* result_row_array,
-  size_t* result_col_array,
-  T* result_data_array,
-  const T* bias
+template <typename T>
+void CUDART_CB non_empty_rows(
+  void* data
 ) {
+  HostFuncArgs* args = (HostFuncArgs*)(data);
+  int num_inputs = args->num_inputs;
+  int* cur_layer = args->cur_layer;
+  int* nnz = args->nerowsY;
+  int* rlen = args->rlenY[((*cur_layer) + 1) % 2];
+  int* nnz_rows = args->rowsY[((*cur_layer) + 1) % 2];
 
-  size_t row = blockIdx.x * blockDim.x + threadIdx.x;
-  if(row < *y_n_rows){
-    const size_t row_start = y_row_array[row];
-    const size_t row_end = y_row_array[row + 1];
-    T sum = 0;
-    size_t current_col;
-    size_t nnz_count = result_row_array[row];
-    for(size_t w_col = 0; w_col < *w_n_cols; ++w_col){
-      current_col = w_col_array[w_col];
-      for(size_t y = row_start; y < row_end; ++y){
-        for(size_t w = current_col; w < w_col_array[w_col + 1]; ++w){
-          if(y_col_array[y] > w_row_array[w]){
-            continue;
-          }
-          else if(y_col_array[y] < w_row_array[w]){
-            break;
-          }
-          else{
-            sum += y_data_array[y] * w_data_array[w];
-            current_col = w;
-            break;
-          }
-        }
-      }
-      if(sum == 0){
-        continue;
-      }
-      sum += *bias;
-      if(sum <= 0){
-        sum = 0;
-        continue;
-      }
-      if(sum > 32){
-        sum = 32;
-      }
-      result_data_array[nnz_count] = sum;
-      result_col_array[nnz_count++] = w_col;
-      sum = 0;
+  *nnz = 0;
+
+  for(int i = 0; i < num_inputs; ++i){
+    if(rlen[i] != 0){
+      nnz_rows[(*nnz)++] = i;
     }
   }
+  ++(*cur_layer);
 }
 
 inline
@@ -401,20 +328,22 @@ void baseline_inference(
   const int COL_BLK,
   const int N_SLAB,
   const int num_neurons_per_layer,
-  const int nnz_per_layer,
-  int* W,
+  const int* roffW,
+  const int* colsW,
+  const T* valsW,
   const T bias,
   T* Y1,
   int* rlenY1
 ) {
-  extern  __shared__ float shRow[];
 
   if(blockIdx.x >= nerowsY){
     return;
   }
+
+  extern  __shared__ T shRow[];
+
   int tid = threadIdx.y * blockDim.x + threadIdx.x;
   int rid = rowsY0[blockIdx.x];
-  T valY;
   __syncthreads();
   if(tid == 0){
     rlenY0[rid] = 0;
@@ -427,24 +356,26 @@ void baseline_inference(
     }
     __syncthreads();
     for(int j = threadIdx.y; j < num_neurons_per_layer; j += blockDim.y){
-      valY = Y0[rid * num_neurons_per_layer + j];
+      T valY = Y0[rid * num_neurons_per_layer + j];
       if(valY == 0){
         continue;
       }
-      int begOffW = W[i * num_neurons_per_layer + j] + threadIdx.x;
-      int endOffW = W[i * num_neurons_per_layer + j + 1];
+      int begOffW = roffW[i * num_neurons_per_layer + j] + threadIdx.x;
+      int endOffW = roffW[i * num_neurons_per_layer + j + 1];
       for(int k = begOffW; k < endOffW; k += blockDim.x){
-        int colW = W[num_neurons_per_layer * N_SLAB + 1 + k];
-        T valW = reinterpret_cast<T*>(W + num_neurons_per_layer * N_SLAB + 1 + nnz_per_layer)[k];
+        int colW = colsW[k];
+        T valW = valsW[k];
         atomicAdd(&shRow[colW - i * COL_BLK], valY * valW);
       }
     }
     __syncthreads();
     int count = 0;
     for(int j = 0; j < COL_BLK; j += blockDim.x * blockDim.y){
-      T v = (j + tid < COL_BLK) ? shRow[j + tid] + bias : -1;
-      count += __syncthreads_count(v > 0);
-      Y1[rid * num_neurons_per_layer + i * COL_BLK + j + tid] = min(T(32), max(T(0), v));
+      if(j + tid < COL_BLK){
+        T v = shRow[j + tid] + bias;
+        count += __syncthreads_count(v > 0);
+        Y1[rid * num_neurons_per_layer + i * COL_BLK + j + tid] = min(T(32), max(T(0), v));
+      }
     }
     if(tid == 0){
       rlenY1[rid] += count;

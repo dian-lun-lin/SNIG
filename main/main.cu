@@ -43,7 +43,7 @@ int main(int argc, char* argv[]) {
       "total number of layers, default is 120"
   );
 
-  double bias = -0.3f;
+  float bias = -0.3f;
   app.add_option("-b, --bias", bias, "bias");
 
 
@@ -78,11 +78,20 @@ int main(int argc, char* argv[]) {
       weight_path, 
       bias,
       num_neurons_per_layer, 
-      num_neurons_per_layer * 32,
       num_layers,
-      8192
+      1024
     );
     result = GPU_baseline.infer(input_path, 60000);
+  }
+  else if(mode == "GPU_cugraph"){
+    sparse_dnn::GPUCugraph<float> GPU_cugraph(
+      weight_path, 
+      bias,
+      num_neurons_per_layer, 
+      num_layers,
+      1024
+    );
+    result = GPU_cugraph.infer(input_path, 60000);
   }
   auto golden = sparse_dnn::read_golden(golden_path, 60000);
   if(sparse_dnn::is_passed(result, golden)){

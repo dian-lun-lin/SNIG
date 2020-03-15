@@ -50,13 +50,12 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> get_score(const Eigen::SparseMatrix<T>& ta
 template<typename T>
 Eigen::Matrix<int, Eigen::Dynamic, 1> get_score(const CSRMatrix<T>& target, const int rows) {
 
-  int tmp{0};
   Eigen::Matrix<int, Eigen::Dynamic, 1> score(rows, 1);
   for(int i = 0; i < rows; ++i){
-    for(int j = target.row_array[i]; j < target.row_array[i + 1]; ++j){
-      tmp += target.data_array[j];
-    }
-    score(i, 0) = tmp > 0 ? 1 : 0;
+    int beg = target.row_array[i];
+    int end = target.row_array[i + 1];
+    T sum = std::accumulate(target.data_array + beg, target.data_array + end, 0);
+    score(i, 0) = sum > 0 ? 1 : 0;
   }
   return score;
 }
@@ -66,7 +65,8 @@ bool is_passed(
     const Eigen::Matrix<int, Eigen::Dynamic, 1>& output,
     const Eigen::Matrix<int, Eigen::Dynamic, 1>& golden
 ) {
-  return (output.cwiseEqual(golden).count());
+
+  return (output.cwiseEqual(golden).count() == output.rows());
 }
 
 template<typename T>
@@ -75,6 +75,7 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> get_score(
   const int rows,
   const int cols
 ){
+
   Eigen::Matrix<int, Eigen::Dynamic, 1> score(rows, 1);
   for(int i = 0; i < rows; ++i){
     T sum = std::accumulate(arr + i * cols, arr + (i+1) * cols, 0);

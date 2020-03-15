@@ -65,6 +65,7 @@ int main(int argc, char* argv[]) {
 
   //Data parallel mode
   Eigen::Matrix<int, Eigen::Dynamic, 1> result;
+
   if(mode == "CPU_parallel"){
     sparse_dnn::CPUParallel<float> cpu_parallel(
         weight_path,
@@ -75,7 +76,6 @@ int main(int argc, char* argv[]) {
     result = cpu_parallel.infer(input_path, 60000);
   }
   else if(mode == "sequential"){
-    //Sequential mode
     sparse_dnn::Sequential<float> sequential(
       weight_path, 
       bias,
