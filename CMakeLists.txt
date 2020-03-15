@@ -33,23 +33,40 @@ include(CTest)
 
 #compiler setting 
 add_library(error_settings INTERFACE)
+add_library(sparse_dnn::error_settings ALIAS error_settings)
 
 target_compile_options(
   error_settings
   INTERFACE
   $<$<CXX_COMPILER_ID:Clang>:-Wall -Wextra -Wfatal-errors>
   $<$<CXX_COMPILER_ID:GNU>:-Wall -Wextra -Wfatal-errors>
+  $<$<COMPILE_LANGUAGE:CUDA>: -lineinfo>
 )
 
 #optmization
 add_library(optimize_settings INTERFACE)
+add_library(sparse_dnn::optimize_settings ALIAS optimize_settings)
+
 target_compile_options(
   optimize_settings INTERFACE
   $<$<AND:$<CONFIG:Release>,$<CXX_COMPILER_ID:Clang>>:-O2 -march=native>
   $<$<AND:$<CONFIG:Release>,$<CXX_COMPILER_ID:GNU>>:-O2 -march=native>
+  $<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CUDA>>:-O2 -march=native>
   $<$<AND:$<CONFIG:Debug>,$<CXX_COMPILER_ID:GNU>>:-O0 -g>
   $<$<AND:$<CONFIG:Debug>,$<CXX_COMPILER_ID:Clang>>:-O0 -g>
+  $<$<AND:$<CONFIG:Debug>,$<COMPILE_LANGUAGE:CUDA>>:-O0 -g>
 )
+
+#default
+add_library(default_settings INTERFACE)
+add_library(sparse_dnn::default_settings ALIAS default_settings)
+target_link_libraries(
+  default_settings 
+  INTERFACE 
+  sparse_dnn::error_settings 
+  sparse_dnn::optimize_settings 
+)
+
 
 # CXX target properties
 set(CMAKE_CXX_STANDARD 14)
@@ -78,10 +95,14 @@ message(STATUS "PROJECT_NAME: " ${PROJECT_NAME})
 include_directories(${PROJECT_SOURCE_DIR})
 include_directories(${PROJECT_SOURCE_DIR}/3rd-party/)
 
+#cuda
+include_directories(/usr/local/cuda/include/)
+link_directories(/usr/local/cuda/lib64/)
+
 #--------interface------
 add_library(${PROJECT_NAME} INTERFACE)
 
-target_compile_features(${PROJECT_NAME} INTERFACE cxx_std_17)
+target_compile_features(${PROJECT_NAME} INTERFACE cxx_std_14)
 target_include_directories(${PROJECT_NAME} INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
   $<INSTALL_INTERFACE:include/> 
@@ -89,41 +110,42 @@ target_include_directories(${PROJECT_NAME} INTERFACE
 #-----------------------
 
 # test
-if(${SDNN_BUILD_TESTS})
+#if(${SDNN_BUILD_TESTS})
  
-enable_testing()
-message(STATUS "Building unit tests ...")
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${SDNN_UTEST_DIR})
+#enable_testing()
+#message(STATUS "Building unit tests ...")
+#set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${SDNN_UTEST_DIR})
 
-add_executable(reader ${SDNN_UTEST_DIR}/reader.cpp)
-target_link_libraries(reader stdc++fs)
-target_include_directories(reader PRIVATE ${SDNN_3RD_PARTY_DIR}/doctest)
-add_test(tsv_string_to_matrix ${SDNN_UTEST_DIR}/reader -tc=tsv_string_to_matrix)
+#add_executable(reader ${SDNN_UTEST_DIR}/reader.cpp)
+#target_link_libraries(reader stdc++fs)
+#target_include_directories(reader PRIVATE ${SDNN_3RD_PARTY_DIR}/doctest)
+#add_test(tsv_string_to_matrix ${SDNN_UTEST_DIR}/reader -tc=tsv_string_to_matrix)
 
-add_executable(matrix_operation ${SDNN_UTEST_DIR}/matrix_operation.cpp)
-target_include_directories(matrix_operation PRIVATE ${SDNN_3RD_PARTY_DIR}/doctest)
-add_test(CSR_matrix_to_eigen_sparse ${SDNN_UTEST_DIR}/matrix_operation -tc=CSR_matrix_to_eigen_sparse)
+#add_executable(matrix_operation ${SDNN_UTEST_DIR}/matrix_operation.cpp)
+#target_include_directories(matrix_operation PRIVATE ${SDNN_3RD_PARTY_DIR}/doctest)
+#add_test(CSR_matrix_to_eigen_sparse ${SDNN_UTEST_DIR}/matrix_operation -tc=CSR_matrix_to_eigen_sparse)
 
-cuda_add_executable(task ${SDNN_UTEST_DIR}/task.cu)
-target_include_directories(task PRIVATE ${SDNN_3RD_PARTY_DIR}/doctest)
-add_test(GPU_check_nnz ${SDNN_UTEST_DIR}/task -tc=check_nnz)
-add_test(GPU_task ${SDNN_UTEST_DIR}/task -tc=task_GPU)
+#cuda_add_executable(task ${SDNN_UTEST_DIR}/task.cu)
+#target_include_directories(task PRIVATE ${SDNN_3RD_PARTY_DIR}/doctest)
+#add_test(GPU_check_nnz ${SDNN_UTEST_DIR}/task -tc=check_nnz)
+#add_test(GPU_task ${SDNN_UTEST_DIR}/task -tc=task_GPU)
 
-add_executable(thread_pool ${SDNN_UTEST_DIR}/thread_pool.cpp)
-target_include_directories(thread_pool PRIVATE ${SDNN_3RD_PARTY_DIR}/doctest)
-target_link_libraries(thread_pool Threads::Threads)
-add_test(ThreadPool_sum ${SDNN_UTEST_DIR}/thread_pool -tc=sum)
-add_test(ThreadPool_create ${SDNN_UTEST_DIR}/thread_pool -tc=create_pool)
-add_test(ThreadPool_enqueue_type ${SDNN_UTEST_DIR}/thread_pool -tc=enque_type)
-add_test(ThreadPool_enqueue_large_size ${SDNN_UTEST_DIR}/thread_pool -tc=enque_large_size)
+#add_executable(thread_pool ${SDNN_UTEST_DIR}/thread_pool.cpp)
+#target_include_directories(thread_pool PRIVATE ${SDNN_3RD_PARTY_DIR}/doctest)
+#target_link_libraries(thread_pool Threads::Threads)
+#add_test(ThreadPool_sum ${SDNN_UTEST_DIR}/thread_pool -tc=sum)
+#add_test(ThreadPool_create ${SDNN_UTEST_DIR}/thread_pool -tc=create_pool)
+#add_test(ThreadPool_enqueue_type ${SDNN_UTEST_DIR}/thread_pool -tc=enque_type)
+#add_test(ThreadPool_enqueue_large_size ${SDNN_UTEST_DIR}/thread_pool -tc=enque_large_size)
 
-endif()
+#endif()
 
 # add executables
 message(STATUS "building executables ...")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
+set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS}" "-lineinfo" )
 
 cuda_add_executable(main_cuda ${PROJECT_SOURCE_DIR}/main/main.cu)
-target_link_libraries(main_cuda stdc++fs)
-#add_executable(main ${PROJECT_SOURCE_DIR}/main/main.cpp)
-#target_link_libraries(main ${PROJECT_NAME} Threads::Threads stdc++fs)
+target_link_libraries(main_cuda stdc++fs cusparse sparse_dnn::default_settings)
+add_executable(main ${PROJECT_SOURCE_DIR}/main/main.cpp)
+target_link_libraries(main ${PROJECT_NAME} Threads::Threads stdc++fs sparse_dnn::default_settings)
