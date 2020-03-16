@@ -21,8 +21,10 @@ class GPUBaseline {
     T _bias;
     int _num_neurons_per_layer;
     int _num_layers;
-    int _COL_BLK;
+
     int _max_nnz_per_layer;
+    int _COL_BLK;
+    int _pad;
 
     void _non_empty_rows(
       const int num_inputs,
@@ -36,8 +38,7 @@ class GPUBaseline {
       const std::fs::path& weight_path,
       const T bias = -.3f,
       const int num_neurons_per_layer = 1024,
-      const int num_layers = 120,
-      const int COL_BLK = 8192
+      const int num_layers = 120
     );
 
     ~GPUBaseline();
@@ -61,30 +62,53 @@ GPUBaseline<T>::GPUBaseline(
   const std::fs::path& weight_path,
   const T bias,
   const int num_neurons_per_layer,
-  const int num_layers,
-  const int COL_BLK
+  const int num_layers
 ):
   _bias{bias},
   _num_neurons_per_layer{num_neurons_per_layer},
   _num_layers{num_layers},
-  _COL_BLK{COL_BLK}
+  _pad{0}
 {
+  //get tuned shared memory size
+  //num_neurons_per_layer must be divisible by shared memory (a.k.a. COL_BLK)
+  //only for single GPU
+  //only for double float
+  cudaDeviceProp props;
+  cudaGetDeviceProperties(&props, 0);
+  int max_num_per_block = props.sharedMemPerBlock / sizeof(T);
+  if(num_neurons_per_layer <= max_num_per_block){
+    _COL_BLK = num_neurons_per_layer;
+  }
+  else{
+//issue max_divisor is large?
+    int max_divisor = 2;
+    while((num_neurons_per_layer % max_divisor != 0) || (max_num_per_block < (num_neurons_per_layer / max_divisor))){
+      ++max_divisor;
+    }
+    _COL_BLK = num_neurons_per_layer / max_divisor;
+  }
 
   std::cout << "Constructing a GPU parallel network.\n";
   std::cout << "Loading the weight.............." << std::flush;
 
-  int N_SLAB = std::ceil(num_neurons_per_layer / float(COL_BLK)); 
+  int N_SLAB = num_neurons_per_layer / _COL_BLK; 
 
   _max_nnz_per_layer = find_max_nnz(weight_path, num_layers, num_neurons_per_layer);
 
+  //handle aligned (only deal with double and float)
+  if((num_neurons_per_layer * N_SLAB + 1 + _max_nnz_per_layer) % sizeof(T) != 0){
+    ++_pad;
+  }
+
   checkCuda(cudaMallocHost(
     (void**)&_h_pinned_weight,
-    (sizeof(int) * (num_neurons_per_layer * N_SLAB + 1 + _max_nnz_per_layer) +
+    (sizeof(int) * (num_neurons_per_layer * N_SLAB + 1 + _max_nnz_per_layer + _pad) +
     sizeof(T) * _max_nnz_per_layer) * num_layers
   ));
-  std::memset(_h_pinned_weight, 0, (sizeof(int) * (num_neurons_per_layer * N_SLAB + 1 + _max_nnz_per_layer) + sizeof(T) * _max_nnz_per_layer) * num_layers);
 
-  read_weight<T>(weight_path, num_neurons_per_layer, _max_nnz_per_layer, num_layers, _COL_BLK, N_SLAB, _h_pinned_weight);
+  std::memset(_h_pinned_weight, 0, (sizeof(int) * (num_neurons_per_layer * N_SLAB + 1 + _max_nnz_per_layer + _pad) + sizeof(T) * _max_nnz_per_layer) * num_layers);
+
+  read_weight<T>(weight_path, num_neurons_per_layer, _max_nnz_per_layer, num_layers, _COL_BLK, N_SLAB, _pad, _h_pinned_weight);
 
   std::cout << "Done\n";
 }
@@ -103,21 +127,23 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUBaseline<T>::infer(
 
   std::cout << "Preprocessing.............................." << std::flush;
 
+  int N_SLAB = _num_neurons_per_layer / _COL_BLK; 
+
   int *d_W[2];
   checkCuda(cudaMalloc(
     &d_W[0],
-    sizeof(int) * (_max_nnz_per_layer + _num_neurons_per_layer + 1) + 
+    sizeof(int) * (_max_nnz_per_layer + _num_neurons_per_layer * N_SLAB + 1 + _pad) + 
     sizeof(T) * (_max_nnz_per_layer)
   ));
   checkCuda(cudaMalloc(
     &d_W[1],
-    sizeof(int) * (_max_nnz_per_layer + _num_neurons_per_layer + 1) + 
+    sizeof(int) * (_max_nnz_per_layer + _num_neurons_per_layer * N_SLAB + 1 + _pad) + 
     sizeof(T) * (_max_nnz_per_layer)
   ));
   checkCuda(cudaMemcpy(
     d_W[0],
     _h_pinned_weight,
-    sizeof(int) * (_max_nnz_per_layer + _num_neurons_per_layer + 1) + 
+    sizeof(int) * (_max_nnz_per_layer + _num_neurons_per_layer * N_SLAB + 1 + _pad) + 
     sizeof(T) * (_max_nnz_per_layer),
     cudaMemcpyHostToDevice
   ));
@@ -143,7 +169,7 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUBaseline<T>::infer(
   checkCuda(cudaMemset(rlenY[1], 0, sizeof(int) * num_inputs));
   checkCuda(cudaDeviceSynchronize());
 
-  //issue: doesn't check boundary
+//issue: doesn't check boundary
   int nerowsY{0};
   read_input<T>(input_path, num_inputs, _num_neurons_per_layer, Y[0], rowsY[0], nerowsY);
 
@@ -151,19 +177,19 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUBaseline<T>::infer(
 
   std::cout << "Start inference............................" << std::flush;
 
-  int N_SLAB = std::ceil(_num_neurons_per_layer / float(_COL_BLK)); 
 
   cudaStream_t stream[2];
   checkCuda(cudaStreamCreateWithFlags(&stream[0], cudaStreamNonBlocking));
   checkCuda(cudaStreamCreateWithFlags(&stream[1], cudaStreamNonBlocking));
 //issue: how many threads
   dim3 threads(32, 32, 1);
+
   for(int k = 0; k < _num_layers - 1; ++k){
 
     checkCuda(cudaMemcpyAsync(
       d_W[(k + 1) % 2],
-      _h_pinned_weight + (k + 1) * (_num_neurons_per_layer * N_SLAB + 1 + _max_nnz_per_layer + ((sizeof(T) / sizeof(int)) * _max_nnz_per_layer)),
-      sizeof(int) * (_num_neurons_per_layer * N_SLAB + 1 + _max_nnz_per_layer) + sizeof(T) * (_max_nnz_per_layer),
+      _h_pinned_weight + (k + 1) * (_num_neurons_per_layer * N_SLAB + 1 + _max_nnz_per_layer + _pad + ((sizeof(T) / sizeof(int)) * _max_nnz_per_layer)),
+      sizeof(int) * (_num_neurons_per_layer * N_SLAB + 1 + _max_nnz_per_layer + _pad) + sizeof(T) * (_max_nnz_per_layer),
       cudaMemcpyHostToDevice,
       stream[0]
     ));
@@ -178,7 +204,7 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUBaseline<T>::infer(
       _num_neurons_per_layer,
       d_W[k % 2],
       d_W[k % 2] + _num_neurons_per_layer * N_SLAB + 1,
-      reinterpret_cast<T*>(d_W[k % 2] + _num_neurons_per_layer * N_SLAB + 1 + _max_nnz_per_layer),
+      (T*)(d_W[k % 2] + _num_neurons_per_layer * N_SLAB + 1 + _max_nnz_per_layer),
       _bias,
       Y[(k + 1) % 2],
       rlenY[(k + 1) % 2]
@@ -198,9 +224,9 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUBaseline<T>::infer(
     _COL_BLK,
     N_SLAB,
     _num_neurons_per_layer,
-    d_W[(_num_layers - 1) % 2],
+    d_W[(_num_layers - 1 ) % 2],
     d_W[(_num_layers - 1) % 2] + _num_neurons_per_layer * N_SLAB + 1,
-    reinterpret_cast<T*>(d_W[(_num_layers - 1) % 2] + _num_neurons_per_layer * N_SLAB + 1 + _max_nnz_per_layer),
+    (T*)(d_W[(_num_layers - 1) % 2] + _num_neurons_per_layer * N_SLAB + 1 + _max_nnz_per_layer),
     _bias,
     Y[(_num_layers) % 2],
     rlenY[(_num_layers) % 2]

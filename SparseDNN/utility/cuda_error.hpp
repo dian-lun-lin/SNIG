@@ -1,3 +1,4 @@
+#pragma once
 #include <assert.h>
 
 // Convenience function for checking CUDA runtime API results

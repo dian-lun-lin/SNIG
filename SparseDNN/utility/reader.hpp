@@ -97,6 +97,7 @@ void read_weight(
     const size_t num_layers,
     const int COL_BLK,
     const int N_SLAB,
+    const int pad,
     int* arr
 );
 
@@ -269,7 +270,7 @@ void tsv_string_to_CSR_packed_array(
     }
     triplet_list.emplace_back(
       std::stoi(tokens[0]) - 1 + 
-      rows * ((std::stoi(tokens[1]) - 1) / COL_BLK),
+      cols * ((std::stoi(tokens[1]) - 1) / COL_BLK),
       std::stoi(tokens[1]) - 1,
       to_numeric<T>(tokens[2])
     );
@@ -363,6 +364,7 @@ void read_weight(
     const size_t num_layers,
     const int COL_BLK,
     const int N_SLAB,
+    const int pad,
     int* arr
 ) {
 
@@ -379,9 +381,7 @@ void read_weight(
       max_nnz_per_layer,
       COL_BLK,  
       N_SLAB,
-      arr + i * (num_neurons_per_layer * N_SLAB + 1 + max_nnz_per_layer +
-        ((sizeof(T) / sizeof(int)) * max_nnz_per_layer)
-      )
+      arr + i * (num_neurons_per_layer * N_SLAB + 1 + max_nnz_per_layer + pad + (sizeof(T) / sizeof(int)) * max_nnz_per_layer)
     );
 
   }
