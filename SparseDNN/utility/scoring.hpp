@@ -1,5 +1,5 @@
 #pragma once
-#include <Eigen/Sparse>
+#include <Eigen/SparseCore>
 #include <Eigen/Dense>
 #include <SparseDNN/utility/matrix_format.h>
 
@@ -66,7 +66,11 @@ bool is_passed(
     const Eigen::Matrix<int, Eigen::Dynamic, 1>& golden
 ) {
 
-  return (output.cwiseEqual(golden).count() == output.rows());
+  int check = output.rows() - output.cwiseEqual(golden).count();
+  std::cout << "Number of different categories: " << check << std::endl;
+
+  return (check == 0);
+
 }
 
 template<typename T>
