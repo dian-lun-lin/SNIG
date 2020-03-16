@@ -67,31 +67,16 @@ void baseline_inference(
   int* rlenY1
 );
 
+inline
+void CUDART_CB non_empty_rows(
+  void* data
+);
+
 
 //-----------------------------------------------------------------------------
 //Definition of task function
 //-----------------------------------------------------------------------------
 
-template <typename T>
-void CUDART_CB non_empty_rows(
-  void* data
-) {
-  HostFuncArgs* args = (HostFuncArgs*)(data);
-  int num_inputs = args->num_inputs;
-  int* cur_layer = args->cur_layer;
-  int* nnz = args->nerowsY;
-  int* rlen = args->rlenY[((*cur_layer) + 1) % 2];
-  int* nnz_rows = args->rowsY[((*cur_layer) + 1) % 2];
-
-  *nnz = 0;
-
-  for(int i = 0; i < num_inputs; ++i){
-    if(rlen[i] != 0){
-      nnz_rows[(*nnz)++] = i;
-    }
-  }
-  ++(*cur_layer);
-}
 
 inline
 void cusparse_mutiplication(
@@ -371,9 +356,9 @@ void baseline_inference(
     __syncthreads();
     int count = 0;
     for(int j = 0; j < COL_BLK; j += blockDim.x * blockDim.y){
+      T v = j + tid < COL_BLK ? shRow[j + tid] + bias : -1;
+      count += __syncthreads_count(v > 0);
       if(j + tid < COL_BLK){
-        T v = shRow[j + tid] + bias;
-        count += __syncthreads_count(v > 0);
         Y1[rid * num_neurons_per_layer + i * COL_BLK + j + tid] = min(T(32), max(T(0), v));
       }
     }
@@ -382,6 +367,27 @@ void baseline_inference(
     }
   }
 
+}
+
+inline
+void CUDART_CB non_empty_rows(
+  void* data
+) {
+  HostFuncArgs* args = (HostFuncArgs*)(data);
+  int* cur_layer = args->cur_layer;
+  int num_inputs = args->num_inputs;
+  int* rlen = args->rlenY[((*cur_layer) + 1) % 2];
+  int* nnz_rows = args->rowsY[((*cur_layer) + 1) % 2];
+  int* nnz = args->nerowsY;
+
+  *nnz = 0;
+
+  for(int i = 0; i < num_inputs; ++i){
+    if(rlen[i] != 0){
+      nnz_rows[(*nnz)++] = i;
+    }
+  }
+  ++(*cur_layer);
 }
 
 }// end of namespace sparse_dnn ----------------------------------------------
