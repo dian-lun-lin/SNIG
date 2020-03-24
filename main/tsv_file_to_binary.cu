@@ -1,17 +1,22 @@
 #pragma once
 #include <CLI11/CLI11.hpp>
-#include <iostream>
 #include <SparseDNN/utility/reader.hpp>
 
 
 int main(int argc, char* argv[]) {
 
-  // usage: ./tsv_file_to_binary --neurons(-n) 1024 --layers(-l) 1920 
-  //          --weight_dir(-w) ../sample_data/weight/neuron1024/
-  //          --input_path(-i)  ../sample_data/MNIST/sparse-images-1024.tsv
-  //          --golden_path(-g)  ../sample_data/MNIST/neuron1024-l120-categories.tsv
+  // usage: ./tsv_file_to_binary
+  //          --neurons(-n) 1024, 4096, or 16384
+  //          --layers(-l)  120, 480, or 1920
+  //          --weight_path(-w) path of weight
+  //          --input_path(-i)  path of input
+  //          --golden_path(-g) path of golden
+  //          --golden_all  Convert all golden files if true
 
-  //          --golden_all true  Convert all golden files
+  // example1:
+  //        ./tsv_file_to_binary 
+  // example2:
+  //        ./tsv_file_to_binary -n 1024 -l 1920 -w ../sample_data/weight/neuron1024/ -i ../sample_data/MNIST/ -g ../sample_data/MNIST/ --golden_all true
 
   // COL_BLK, N_SLAB would be caculated automatically, based on GPU architecture.
 

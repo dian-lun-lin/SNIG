@@ -18,7 +18,7 @@ int main(int argc, char* argv[]) {
   //        --golden_path path of golden
 
   //example:  
-  //        ./main_cu  -m GPU_cugraph --weight=../sample_data/weight/neuron1024/ --num_neurons_per_layer=1024 --num_layers=120 --input_path=../sample_data/MNIST/sparse-images-1024.b --golden_path=../sample_data/MNIST/neuron1024-l120-categories.b
+  //        ./main_cu  -m GPU_cugraph --weight ../sample_data/weight/neuron1024/ --num_neurons_per_layer 1024 --num_layers 120 --input_path ../sample_data/MNIST/sparse-images-1024.b --golden_path ../sample_data/MNIST/neuron1024-l120-categories.b
 
   CLI::App app{"SparseDNN"};
   std::string mode = "sequential";

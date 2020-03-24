@@ -717,7 +717,7 @@ void tsv_file_to_binary_file(
       }
       triplets.emplace_back(
         std::stoi(tokens[0]) - 1 + 
-        ((std::stoi(tokens[1]) - 1) / COL_BLK),
+        rows * ((std::stoi(tokens[1]) - 1) / COL_BLK),
         std::stoi(tokens[1]) - 1,
         to_numeric<T>(tokens[2])
       );
