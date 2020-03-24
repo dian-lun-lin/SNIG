@@ -1,10 +1,10 @@
 #pragma once
-#include<Eigen/SparseCore>
-#include<SparseDNN/utility/reader.hpp>
-#include<SparseDNN/utility/matrix_operation.hpp>
-#include<SparseDNN/parallel/task.hpp>
-#include <SparseDNN/utility/scoring.hpp>
+#include <Eigen/SparseCore>
 #include <Eigen/Dense>
+#include <SparseDNN/utility/reader.hpp>
+#include <SparseDNN/utility/matrix_operation.hpp>
+#include <SparseDNN/utility/scoring.hpp>
+#include <SparseDNN/parallel/task.hpp>
 
 namespace std{
   namespace fs = experimental::filesystem;
@@ -39,7 +39,6 @@ class GPUCusparse{
 
     int num_neurons_per_layer() const { return _num_neurons_per_layer; };
     int num_layers() const { return _num_layers; };
-    T bias() const { return _bias; };
 
     Eigen::Matrix<int, Eigen::Dynamic, 1> infer(
       const std::fs::path& input_path,
@@ -88,7 +87,7 @@ GPUCusparse<T>::GPUCusparse(
 template<typename T>
 GPUCusparse<T>::~GPUCusparse() {
 
-  for(auto& w:_weights){
+  for(auto& w:_weights) {
     delete[] w.row_array;
     delete[] w.col_array;
     delete[] w.data_array;
@@ -125,7 +124,7 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUCusparse<T>::infer(
   CSRMatrix<T> d_w;
   cudaMalloc(&d_w.row_array, sizeof(int) * (_num_neurons_per_layer + 1));
 
-  for(const auto& w : _weights){
+  for(const auto& w : _weights) {
 
     y_nnz = y.row_array[num_inputs];
     cudaMalloc(&d_y.col_array, sizeof(int) * y_nnz);

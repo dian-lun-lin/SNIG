@@ -1,13 +1,11 @@
 #pragma once
-#include <Eigen/Sparse>
+#include <Eigen/SparseCore>
+#include <Eigen/Dense>
 #include <SparseDNN/utility/reader.hpp>
 #include <SparseDNN/utility/matrix_operation.hpp>
 #include <SparseDNN/utility/thread_pool.hpp>
 #include <SparseDNN/utility/scoring.hpp>
-#include <Eigen/Dense>
-
 #include <vector>
-
 #include<thread>
 
 namespace std {
@@ -28,8 +26,8 @@ class CPUParallel {
   private:
 
     std::vector<Eigen::SparseMatrix<T> > _weights;
-    const size_t _num_neurons_per_layer;
-    const size_t _num_layers;
+    const int _num_neurons_per_layer;
+    const int _num_layers;
     const T _bias;
 
     Eigen::Matrix<int, Eigen::Dynamic, 1> _data_parallel_task(
@@ -41,19 +39,18 @@ class CPUParallel {
     CPUParallel(
       const std::fs::path& wieght_path,
       const T bias,
-      const size_t num_neurons_per_layer=1024,
-      const size_t num_layers=120
+      const int num_neurons_per_layer=1024,
+      const int num_layers=120
       );
 
     ~CPUParallel();
 
-    size_t num_neurons_per_layer() const { return _num_neurons_per_layer; };
-    size_t num_layers() const { return _num_layers; };
-    T bias() const { return _bias; };
+    int num_neurons_per_layer() const { return _num_neurons_per_layer; };
+    int num_layers() const { return _num_layers; };
 
     Eigen::Matrix<int, Eigen::Dynamic, 1> infer(
       const std::fs::path& input_path,
-      const size_t num_inputs
+      const int num_inputs
       ) const;
 };
 
@@ -65,8 +62,8 @@ template<typename T>
 CPUParallel<T>::CPUParallel(
   const std::fs::path& weight_path,
   const T bias,
-  const size_t num_neurons_per_layer,
-  const size_t num_layers
+  const int num_neurons_per_layer,
+  const int num_layers
 ):
   _bias{bias},
   _num_neurons_per_layer{num_neurons_per_layer},
@@ -80,14 +77,13 @@ CPUParallel<T>::CPUParallel(
 }
 
 template<typename T>
-CPUParallel<T>::~CPUParallel(){
-
+CPUParallel<T>::~CPUParallel() {
 }
 
 template<typename T>
 Eigen::Matrix<int, Eigen::Dynamic, 1> CPUParallel<T>::infer(
   const std::fs::path& input_path,
-  const size_t num_inputs
+  const int num_inputs
 ) const {
 
   std::cout << "Reading input.............................." << std::flush;
@@ -97,8 +93,8 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> CPUParallel<T>::infer(
   std::cout << "Start inference............................" << std::flush;
   Eigen::SparseVector<T> result;
 
-  size_t num_tasks = 128;
-  size_t num_threads = std::thread::hardware_concurrency();
+  int num_tasks = 128;
+  int num_threads = std::thread::hardware_concurrency();
   ThreadPool pool(num_threads);
 
   auto slicing_inputs = slice_by_row<T>(input, num_tasks);

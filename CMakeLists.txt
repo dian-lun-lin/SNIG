@@ -54,7 +54,7 @@ target_compile_options(
   $<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CUDA>>:-O2 -march=native>
   $<$<AND:$<CONFIG:Debug>,$<CXX_COMPILER_ID:GNU>>:-O0 -g>
   $<$<AND:$<CONFIG:Debug>,$<CXX_COMPILER_ID:Clang>>:-O0 -g>
-  $<$<AND:$<CONFIG:Debug>,$<COMPILE_LANGUAGE:CUDA>>:-O0 -g>
+  $<$<AND:$<CONFIG:Debug>,$<COMPILE_LANGUAGE:CUDA>>:-O0 -g -G>
 )
 
 #default
@@ -142,10 +142,15 @@ target_include_directories(${PROJECT_NAME} INTERFACE
 
 # add executables
 message(STATUS "building executables ...")
+
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
-set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS}" "-lineinfo" )
+set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS}" "-arch=sm_75 \ -gencode=arch=compute_75,code=compute_75" )
 
 cuda_add_executable(main_cuda ${PROJECT_SOURCE_DIR}/main/main.cu)
 target_link_libraries(main_cuda stdc++fs cusparse sparse_dnn::default_settings)
+
 add_executable(main ${PROJECT_SOURCE_DIR}/main/main.cpp)
 target_link_libraries(main ${PROJECT_NAME} Threads::Threads stdc++fs sparse_dnn::default_settings)
+
+cuda_add_executable(tsv_file_to_binary ${PROJECT_SOURCE_DIR}/main/tsv_file_to_binary.cu)
+target_link_libraries(tsv_file_to_binary ${PROJECT_NAME} stdc++fs sparse_dnn::default_settings)

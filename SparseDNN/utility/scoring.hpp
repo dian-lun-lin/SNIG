@@ -6,7 +6,9 @@
 namespace sparse_dnn {
 
 template<typename T>
-Eigen::Matrix<int, Eigen::Dynamic, 1> get_score(const Eigen::SparseMatrix<T>& target);
+Eigen::Matrix<int, Eigen::Dynamic, 1> get_score(
+  const Eigen::SparseMatrix<T>& target
+);
 
 
 template<typename T>
@@ -35,7 +37,9 @@ bool is_passed(
 
 
 template<typename T>
-Eigen::Matrix<int, Eigen::Dynamic, 1> get_score(const Eigen::SparseMatrix<T>& target){
+Eigen::Matrix<int, Eigen::Dynamic, 1> get_score(
+  const Eigen::SparseMatrix<T>& target
+) {
 
   Eigen::Matrix<T, Eigen::Dynamic, 1> result = (target * Eigen::Matrix<T, Eigen::Dynamic, 1>::Ones(target.cols()));
 
@@ -48,7 +52,10 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> get_score(const Eigen::SparseMatrix<T>& ta
 }
 
 template<typename T>
-Eigen::Matrix<int, Eigen::Dynamic, 1> get_score(const CSRMatrix<T>& target, const int rows) {
+Eigen::Matrix<int, Eigen::Dynamic, 1> get_score(
+  const CSRMatrix<T>& target,
+  const int rows
+) {
 
   Eigen::Matrix<int, Eigen::Dynamic, 1> score(rows, 1);
   for(int i = 0; i < rows; ++i){
@@ -67,7 +74,7 @@ bool is_passed(
 ) {
 
   int check = output.rows() - output.cwiseEqual(golden).count();
-  std::cout << "Number of different categories: " << check << std::endl;
+  std::cout << "\nNumber of different categories: " << check << std::endl;
 
   return (check == 0);
 
@@ -78,7 +85,7 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> get_score(
   const T* arr,
   const int rows,
   const int cols
-){
+) {
 
   Eigen::Matrix<int, Eigen::Dynamic, 1> score(rows, 1);
   for(int i = 0; i < rows; ++i){

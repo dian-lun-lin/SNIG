@@ -1,11 +1,10 @@
 #pragma once
-
 #include <iostream>
-#include <Eigen/Sparse>
+#include <Eigen/SparseCore>
+#include <Eigen/Dense>
 #include <SparseDNN/utility/reader.hpp>
 #include <SparseDNN/utility/matrix_operation.hpp>
 #include <SparseDNN/utility/scoring.hpp>
-#include <Eigen/Dense>
 #include <vector>
 
 namespace std {
@@ -26,8 +25,8 @@ class Sequential {
     
     //const issue
     std::vector<Eigen::SparseMatrix<T> > _weights;
-    const size_t _num_neurons_per_layer;
-    const size_t _num_layers;
+    const int _num_neurons_per_layer;
+    const int _num_layers;
     const T _bias;
 
   public:
@@ -35,19 +34,18 @@ class Sequential {
     Sequential(
       const std::fs::path& weight_path,
       const T bias,
-      const size_t num_neurons_per_layer=1024,
-      const size_t num_layers=120
+      const int num_neurons_per_layer=1024,
+      const int num_layers=120
     );
 
     ~Sequential();
 
-    size_t num_neurons_per_layer() const { return _num_neurons_per_layer; };
-    size_t num_layers() const { return _num_layers; };
-    T bias() const { return _bias; };
+    int num_neurons_per_layer() const { return _num_neurons_per_layer; };
+    int num_layers() const { return _num_layers; };
 
     Eigen::Matrix<int, Eigen::Dynamic, 1> infer(
         const std::fs::path& input_path,
-        const size_t num_input
+        const int num_input
     ) const;
 };
 
@@ -59,8 +57,8 @@ template <typename T>
 Sequential<T>::Sequential(
   const std::fs::path& weight_path,
   const T bias,
-  const size_t num_neurons_per_layer,
-  const size_t num_layers
+  const int num_neurons_per_layer,
+  const int num_layers
 ):
   _bias {bias},
   _num_neurons_per_layer {num_neurons_per_layer},
@@ -80,7 +78,7 @@ Sequential<T>::~Sequential() {
 template <typename T>
 Eigen::Matrix<int, Eigen::Dynamic, 1> Sequential<T>::infer(
   const std::fs::path& input_path,
-  const size_t num_inputs
+  const int num_inputs
 ) const {
 
   std::cout << "Reading input.............................." << std::flush;

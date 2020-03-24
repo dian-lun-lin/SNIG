@@ -1,6 +1,7 @@
 #pragma once
 
 namespace sparse_dnn{
+
   template<typename T>
   struct CSRMatrix{
     int* row_array;
@@ -19,6 +20,25 @@ namespace sparse_dnn{
   struct SparseArray{
     int* index_array;
     T* data_array;
+  };
+
+  template <typename T>
+  struct Triplet{
+    int row;
+    int col;
+    T value;
+
+    bool operator < (const Triplet& b) const {
+      return row < b.row;
+    }
+
+    Triplet(int r, int c, T v)
+    : row{r},
+      col{c},
+      value{v}
+    {
+    }
+
   };
 
 }
