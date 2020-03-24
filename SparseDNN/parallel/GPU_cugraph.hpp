@@ -17,6 +17,8 @@ namespace sparse_dnn{
 template <typename T>
 class GPUCugraph {
   
+  // TODO: refactor the file with what we did in cuda_baseline
+
   private:
     
     int* _h_pinned_weight;
@@ -201,9 +203,11 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUCugraph<T>::infer(
 
   std::cout << "Start inference............................" << std::flush;
   if(is_flatten){
+    // TODO it is flatterned not flatten
     _infer_flatten_graph(Y, rowsY, rlenY, d_W, num_inputs);
   }
   else{
+    // TODO: _infer_unflatterned_graph 
     _infer_update_graph(Y, rowsY, rlenY, d_W, num_inputs);
   }
 
@@ -245,7 +249,8 @@ void GPUCugraph<T>::_infer_update_graph(
   cudaMemsetParams memset_params = {0};
 
   int cur_layer = 0;
-
+  
+  // TODO (DL): PLEASE alias the operations to avoid duplicate 
   //memcpy
   memcpy_params.srcPtr        = make_cudaPitchedPtr(
     _h_pinned_weight + (cur_layer + 1) * (_num_neurons_per_layer * _N_SLAB + 1 + _max_nnz_per_layer + _pad + ((sizeof(T) / sizeof(int)) * _max_nnz_per_layer)),
@@ -283,7 +288,8 @@ void GPUCugraph<T>::_infer_update_graph(
   int* roffW = d_W[cur_layer % 2];
   int* colsW = d_W[cur_layer % 2] + _num_neurons_per_layer * _N_SLAB + 1;
   T* valsW = (T*)(d_W[cur_layer % 2] + _num_neurons_per_layer * _N_SLAB + 1 + _max_nnz_per_layer);
-
+  
+  // TODO: you don't need to hard-code 12
   void* infer_args[12] = {
     (void*)&Y[cur_layer % 2],
     (void*)&rowsY[cur_layer % 2],
