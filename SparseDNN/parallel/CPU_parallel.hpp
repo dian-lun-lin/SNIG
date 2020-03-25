@@ -14,13 +14,12 @@ namespace std {
 
 namespace sparse_dnn {
 
-
 template <typename T>
 class CPUParallel {
 
   static_assert(
-  std::is_same<T, float>::value||std::is_same<T, double>::value,
-  "data type must be either float or double"
+    std::is_same<T, float>::value||std::is_same<T, double>::value,
+    "data type must be either float or double"
   );
 
   private:
@@ -45,8 +44,8 @@ class CPUParallel {
 
     ~CPUParallel();
 
-    int num_neurons_per_layer() const { return _num_neurons_per_layer; };
-    int num_layers() const { return _num_layers; };
+    int num_neurons_per_layer() const;
+    int num_layers() const;
 
     Eigen::Matrix<int, Eigen::Dynamic, 1> infer(
       const std::fs::path& input_path,
@@ -78,6 +77,16 @@ CPUParallel<T>::CPUParallel(
 
 template<typename T>
 CPUParallel<T>::~CPUParallel() {
+}
+
+template<typename T>
+int CPUParallel<T>::num_neurons_per_layer() const { 
+  return _num_neurons_per_layer; 
+}
+
+template<typename T>
+int CPUParallel<T>::num_layers() const { 
+  return _num_layers; 
 }
 
 template<typename T>

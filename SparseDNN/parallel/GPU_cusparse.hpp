@@ -15,8 +15,8 @@ template <typename T>
 class GPUCusparse{
     
   static_assert(
-  std::is_same<T, float>::value || std::is_same<T, double>::value,
-  "data type must be either float or double"
+    std::is_same<T, float>::value || std::is_same<T, double>::value,
+    "data type must be either float or double"
   );
   
   private:
@@ -37,14 +37,13 @@ class GPUCusparse{
 
     ~GPUCusparse();
 
-    int num_neurons_per_layer() const { return _num_neurons_per_layer; };
-    int num_layers() const { return _num_layers; };
+    int num_neurons_per_layer() const;
+    int num_layers() const;
 
     Eigen::Matrix<int, Eigen::Dynamic, 1> infer(
       const std::fs::path& input_path,
       const int num_inputs
     ) const;
-
 
 };
 
@@ -65,10 +64,11 @@ GPUCusparse<T>::GPUCusparse(
 {
 
   std::cout << "Constructing a GPU parallel network.\n";
+
   std::cout << "Loading the weight.............." << std::flush;
   _weights.reserve(num_layers);
   CSRMatrix<T> weight;
-  for(int i = 0; i < num_layers; ++i){
+  for(int i = 0; i < num_layers; ++i) {
     std::fs::path p = weight_path;
     p /= "n" + std::to_string(num_neurons_per_layer) + "-l"
       + std::to_string(i + 1) + ".tsv";
@@ -86,13 +86,21 @@ GPUCusparse<T>::GPUCusparse(
 
 template<typename T>
 GPUCusparse<T>::~GPUCusparse() {
-
   for(auto& w:_weights) {
     delete[] w.row_array;
     delete[] w.col_array;
     delete[] w.data_array;
   }
+}
 
+template<typename T>
+int GPUCusparse<T>::num_neurons_per_layer() const {
+   return _num_neurons_per_layer; 
+}
+
+template<typename T>
+int GPUCusparse<T>::num_layers() const {
+   return _num_layers; 
 }
 
 template<typename T>

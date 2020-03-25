@@ -17,7 +17,9 @@ int main(int argc, char* argv[]) {
   //        --input_path path of input
   //        --golden_path path of golden
 
-  //example:  
+  //example1:  
+  //        ./main_cu
+  //example2:  
   //        ./main_cu  -m GPU_cugraph --weight ../sample_data/weight/neuron1024/ --num_neurons_per_layer 1024 --num_layers 120 --input_path ../sample_data/MNIST/sparse-images-1024.b --golden_path ../sample_data/MNIST/neuron1024-l120-categories.b
 
   CLI::App app{"SparseDNN"};
@@ -63,7 +65,7 @@ int main(int argc, char* argv[]) {
   );
   CLI11_PARSE(app, argc, argv);
   Eigen::Matrix<int, Eigen::Dynamic, 1> result;
-  //if(mode == "GPU_cusparse"){
+  //if(mode == "GPU_cusparse") {
     //sparse_dnn::GPUCusparse<float> GPU_cusparse(
       //weight_path, 
       //bias,

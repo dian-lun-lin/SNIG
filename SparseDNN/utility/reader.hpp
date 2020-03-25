@@ -432,6 +432,11 @@ void read_weight(
   const int pad,
   int* arr
 ) {
+  //T is the floating posize_t type, either float or double
+  static_assert(
+    std::is_same<T, float>::value || std::is_same<T, double>::value,
+    "data type must be either float or double"
+  );
 
   for(int i = 0; i < num_layers; ++i) {
     std::fs::path p = weight_dir;
@@ -463,6 +468,12 @@ void read_weight_binary(
   const int pad,
   int* arr
 ) {
+  //T is the floating posize_t type, either float or double
+  static_assert(
+    std::is_same<T, float>::value || std::is_same<T, double>::value,
+    "data type must be either float or double"
+  );
+
   for(int i = 0; i < num_layers; ++i){
     std::fs::path p = weight_dir;
     p /= "n" + std::to_string(num_neurons_per_layer) + "-l"
@@ -513,6 +524,12 @@ void read_input(
   int* rowsY,
   int& nerowsY
 ) {
+  //T is the floating posize_t type, either float or double
+  static_assert(
+    std::is_same<T, float>::value || std::is_same<T, double>::value,
+    "data type must be either float or double"
+  );
+
   auto input_str = read_file_to_string(input_path);
   tsv_string_to_1D_array<T>(input_str, num_features, arr);
 
@@ -534,6 +551,12 @@ void read_input(
   const int num_features,
   T* arr
 ) {
+  //T is the floating posize_t type, either float or double
+  static_assert(
+    std::is_same<T, float>::value || std::is_same<T, double>::value,
+    "data type must be either float or double"
+  );
+
   auto input_str = read_file_to_string(input_path);
   tsv_string_to_1D_array<T>(input_str, num_features, arr);
 }
@@ -546,6 +569,12 @@ void read_input(
   const int nnz,
   CSRMatrix<T>& mat
 ) {
+  //T is the floating posize_t type, either float or double
+  static_assert(
+    std::is_same<T, float>::value || std::is_same<T, double>::value,
+    "data type must be either float or double"
+  );
+
   tsv_string_to_CSR_matrix<T>(s, num_inputs, num_features, nnz, mat);
 }
 
@@ -557,6 +586,11 @@ void read_input_binary(
   int* rowsY,
   int& nerowsY
 ) {
+  //T is the floating posize_t type, either float or double
+  static_assert(
+    std::is_same<T, float>::value || std::is_same<T, double>::value,
+    "data type must be either float or double"
+  );
 
   std::fs::path p = input_path;
   std::ifstream in(p, std::ios::in | std::ios::binary);
@@ -694,6 +728,11 @@ void tsv_file_to_binary_file(
   const int N_SLAB,
   const int estimate_nnz
 ) {
+  //T is the floating posize_t type, either float or double
+  static_assert(
+    std::is_same<T, float>::value || std::is_same<T, double>::value,
+    "data type must be either float or double"
+  );
 
   std::vector<Triplet<T> > triplets;
   triplets.reserve(estimate_nnz);
@@ -761,6 +800,11 @@ void tsv_file_to_binary_file(
   const int rows,
   const int cols
 ) {
+  //T is the floating posize_t type, either float or double
+  static_assert(
+    std::is_same<T, float>::value || std::is_same<T, double>::value,
+    "data type must be either float or double"
+  );
 
   input_path /= "sparse-images-" + std::to_string(cols) + ".tsv";
   auto data_str = read_file_to_string(input_path);
@@ -798,6 +842,11 @@ void tsv_file_to_binary_file(
   const int num_layers,
   const int rows
 ) {
+  //T is the floating posize_t type, either float or double
+  static_assert(
+    std::is_same<T, float>::value || std::is_same<T, double>::value,
+    "data type must be either float or double"
+  );
 
   std::string line;
   golden_path /= "neuron" + std::to_string(num_features) + "-l" + std::to_string(num_layers) + "-categories.tsv";

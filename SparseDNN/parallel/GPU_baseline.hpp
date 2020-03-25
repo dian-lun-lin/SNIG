@@ -14,6 +14,11 @@ namespace sparse_dnn{
 
 template <typename T>  
 class GPUBaseline {
+
+  static_assert(
+    std::is_same<T, float>::value || std::is_same<T, double>::value,
+    "data type must be either float or double"
+  );
   
   private:
     int* _h_pinned_weight;
@@ -25,6 +30,11 @@ class GPUBaseline {
     int _COL_BLK;
     int _pad;
     int _N_SLAB;
+
+    int _p_w_index_len;
+    int _pp_w_index_len;
+    int _pp_wlen;
+    size_t _pp_wsize;
 
     void _non_empty_rows(
       const int num_inputs,
@@ -44,14 +54,9 @@ class GPUBaseline {
 
     ~GPUBaseline();
     
-    /**
-    @brief queries the number of neurons per layer
-    */
-    // TODO (DL): move the definition outside the class
-    int num_neurons_per_layer() const { return _num_neurons_per_layer; };
+    int num_neurons_per_layer() const;
 
-    // TODO (DL): move the definition outside the class
-    int num_layers() const { return _num_layers; };
+    int num_layers() const;
 
     Eigen::Matrix<int, Eigen::Dynamic, 1> infer(
       const std::fs::path& input_path,
@@ -76,6 +81,8 @@ GPUBaseline<T>::GPUBaseline(
   _num_layers{num_layers},
   _pad{0}
 {
+  std::cout << "Constructing a GPU parallel network.\n";
+
   //get tuned shared memory size
   //num_neurons_per_layer must be divisible by shared memory (a.k.a. COL_BLK)
   //only for single GPU
@@ -87,7 +94,6 @@ GPUBaseline<T>::GPUBaseline(
     _COL_BLK = num_neurons_per_layer;
   }
   else{
-//issue max_divisor is large?
     int max_divisor = 2;
     while((num_neurons_per_layer % max_divisor != 0) || (max_num_per_block < (num_neurons_per_layer / max_divisor))) {
       ++max_divisor;
@@ -95,37 +101,43 @@ GPUBaseline<T>::GPUBaseline(
     _COL_BLK = num_neurons_per_layer / max_divisor;
   }
 
-  // TODO(DL): added timer
 
+  std::cout << "Loading the weight........................." << std::flush;
   auto reading_beg = std::chrono::steady_clock::now();
-
-  std::cout << "Constructing a GPU parallel network.\n";
-  std::cout << "Loading the weight.............." << std::flush;
 
   _N_SLAB = num_neurons_per_layer / _COL_BLK; 
 
-  _max_nnz_per_layer = find_max_nnz_binary(weight_path, num_layers, num_neurons_per_layer);
-  
+  _max_nnz_per_layer = find_max_nnz_binary(
+                         weight_path,
+                         num_layers,
+                         num_neurons_per_layer
+                       );
+
+  // total length of row and col index
+  // value index should consider sizeof(T)
+  _p_w_index_len  = num_neurons_per_layer * _N_SLAB + _max_nnz_per_layer + 1;
 
   //handle aligned (only deal with double and float)
-  // TODO: replaced this lengthy repetitive calculation with the following:
-  // _pwlen  = num_neurons_per_layer * _N_SLAB + _max_nnz_per_layer + 1
-  // _ppwlen = _pwlen + _pad
-  if((num_neurons_per_layer * _N_SLAB + 1 + _max_nnz_per_layer) % sizeof(T) != 0){
+  if(_p_w_index_len % sizeof(T) != 0){
     ++_pad;
   }
 
+  _pp_w_index_len = _p_w_index_len + _pad;
+
+  //pad packed weight length
+  _pp_wlen = _pp_w_index_len + (sizeof(T) / sizeof(float)) * _max_nnz_per_layer;
+  //pad packed weight size
+  _pp_wsize = sizeof(int) * (_pp_w_index_len) + sizeof(T) * _max_nnz_per_layer;
+
   checkCuda(cudaMallocHost(
     (void**)&_h_pinned_weight,
-    (sizeof(int) * (num_neurons_per_layer * _N_SLAB + 1 + _max_nnz_per_layer + _pad) +
-      sizeof(T) * _max_nnz_per_layer) * num_layers
+    _pp_wsize * num_layers
   ));
 
   std::memset(
     _h_pinned_weight,
     0,
-    (sizeof(int) * (num_neurons_per_layer * _N_SLAB + 1 + _max_nnz_per_layer + _pad) +
-      sizeof(T) * _max_nnz_per_layer) * num_layers
+    _pp_wsize * num_layers
   );
 
   read_weight_binary<T>(
@@ -141,46 +153,52 @@ GPUBaseline<T>::GPUBaseline(
   auto reading_end = std::chrono::steady_clock::now();
   std::cout << "finished reading DNN layers with " 
             << std::chrono::duration_cast<std::chrono::milliseconds>(reading_end - reading_beg).count()
+            << "ms"
             << '\n';
 }
 
 template <typename T>
-GPUBaseline<T>:: ~GPUBaseline(){
+GPUBaseline<T>:: ~GPUBaseline() {
   checkCuda(cudaFreeHost(_h_pinned_weight));
 }
 
 template <typename T>
+int GPUBaseline<T>::num_neurons_per_layer() const {
+ return _num_neurons_per_layer; 
+}
+
+template <typename T>
+int GPUBaseline<T>::num_layers() const { 
+  return _num_layers; 
+}
+
+template <typename T>
 Eigen::Matrix<int, Eigen::Dynamic, 1> GPUBaseline<T>::infer(
-  const std::fs::path& input_path,
+const std::fs::path& input_path,
   const int num_inputs
 ) const {
 
   std::cout << "Preprocessing.............................." << std::flush;
-  
   auto pp_beg = std::chrono::steady_clock::now();
+  
   
   // d_W[0]: present layer 
   // d_W[1]: next layer
   int *d_W[2];
   checkCuda(cudaMalloc(
     &d_W[0],
-    sizeof(int) * (_max_nnz_per_layer + _num_neurons_per_layer * _N_SLAB + 1 + _pad) + 
-    sizeof(T) * (_max_nnz_per_layer)
+    _pp_wsize
   ));
   checkCuda(cudaMalloc(
     &d_W[1],
-    sizeof(int) * (_max_nnz_per_layer + _num_neurons_per_layer * _N_SLAB + 1 + _pad) + 
-    sizeof(T) * (_max_nnz_per_layer)
+    _pp_wsize
   ));
   checkCuda(cudaMemcpy(
     d_W[0],
     _h_pinned_weight,
-    sizeof(int) * (_max_nnz_per_layer + _num_neurons_per_layer * _N_SLAB + 1 + _pad) + 
-    sizeof(T) * (_max_nnz_per_layer),
+    _pp_wsize,
     cudaMemcpyHostToDevice
   ));
-
-  std::cout << "Reading input.............................." << std::flush;
 
   T* Y[2];  
   int *rowsY[2], *rlenY[2];
@@ -204,29 +222,28 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUBaseline<T>::infer(
 
   auto pp_end = std::chrono::steady_clock::now();
   
-  std::cout << "finished preprocessing with " << 
-            << std::chrono::duration_cast<std::chrono::milliseconds>(pp_end-pp_beg).count()
+  std::cout << "finished preprocessing with " 
+            << std::chrono::duration_cast<std::chrono::milliseconds>(pp_end - pp_beg).count()
+            << "ms"
             << std::endl;
 
   std::cout << "Start inference............................" << std::flush;
 
-  auto begin = std::chrono::steady_clock::now();
+  auto exec_beg = std::chrono::steady_clock::now();
 
   cudaStream_t stream[2];
 
-  // TODO (CL): cudaStreamCreate is by default non-blocking
-  checkCuda(cudaStreamCreateWithFlags(&stream[0], cudaStreamNonBlocking));
-  checkCuda(cudaStreamCreateWithFlags(&stream[1], cudaStreamNonBlocking));
-//issue: how many threads
+  checkCuda(cudaStreamCreate(&stream[0]));
+  checkCuda(cudaStreamCreate(&stream[1]));
+
   dim3 threads_dim(32, 32, 1);
 
   for(int cur_layer = 0; cur_layer < _num_layers - 1; ++cur_layer){
     
-    // TODO(DL): keep column length within 80-100 characters
     checkCuda(cudaMemcpyAsync(
       d_W[(cur_layer + 1) % 2],
-      _h_pinned_weight + (cur_layer + 1) * (_num_neurons_per_layer * _N_SLAB + 1 + _max_nnz_per_layer + _pad + ((sizeof(T) / sizeof(int)) * _max_nnz_per_layer)),
-      sizeof(int) * (_num_neurons_per_layer * _N_SLAB + 1 + _max_nnz_per_layer + _pad) + sizeof(T) * (_max_nnz_per_layer),
+      _h_pinned_weight + (cur_layer + 1) * (_pp_wlen),
+      _pp_wsize,
       cudaMemcpyHostToDevice,
       stream[0]
     ));
@@ -241,15 +258,28 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUBaseline<T>::infer(
       _num_neurons_per_layer,
       d_W[cur_layer % 2],
       d_W[cur_layer % 2] + _num_neurons_per_layer * _N_SLAB + 1,
-      (T*)(d_W[cur_layer % 2] + _num_neurons_per_layer * _N_SLAB + 1 + _max_nnz_per_layer),
+      (T*)(d_W[cur_layer % 2] + _p_w_index_len),
       _bias,
       Y[(cur_layer + 1) % 2],
       rlenY[(cur_layer + 1) % 2]
     );
+
     checkCuda(cudaStreamSynchronize(stream[1]));
-    _non_empty_rows(num_inputs, rlenY[(cur_layer + 1) % 2], rowsY[(cur_layer + 1) % 2], nerowsY);
+
+    _non_empty_rows(
+      num_inputs,
+      rlenY[(cur_layer + 1) % 2],
+      rowsY[(cur_layer + 1) % 2],
+      nerowsY
+    );
+
     checkCuda(cudaStreamSynchronize(stream[0]));
-    checkCuda(cudaMemset(Y[cur_layer % 2], 0, sizeof(T) * num_inputs * _num_neurons_per_layer));
+
+    checkCuda(cudaMemset(
+      Y[cur_layer % 2],
+      0,
+      sizeof(T) * num_inputs * _num_neurons_per_layer)
+    );
   }
 
   baseline_inference<T><<<nerowsY, threads_dim, sizeof(T) * _COL_BLK, stream[1]>>>(
@@ -262,21 +292,29 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUBaseline<T>::infer(
     _num_neurons_per_layer,
     d_W[(_num_layers - 1 ) % 2],
     d_W[(_num_layers - 1) % 2] + _num_neurons_per_layer * _N_SLAB + 1,
-    (T*)(d_W[(_num_layers - 1) % 2] + _num_neurons_per_layer * _N_SLAB + 1 + _max_nnz_per_layer),
+    (T*)(d_W[(_num_layers - 1) % 2] + _p_w_index_len),
     _bias,
     Y[(_num_layers) % 2],
     rlenY[(_num_layers) % 2]
   );
   checkCuda(cudaStreamSynchronize(stream[1]));
 
-  auto end = std::chrono::steady_clock::now();
-  auto measure_time = std::chrono::duration_cast<std::chrono::microseconds> (end - begin);
-  std::cout << "Exec time: " << measure_time.count() << std::endl;
+  auto exec_end = std::chrono::steady_clock::now();
+  std::cout << "finished execution with " 
+            << std::chrono::duration_cast<std::chrono::milliseconds>(exec_end - exec_beg).count()
+            << "ms"
+            << std::endl;
 
-  std::cout << "Done" << std::endl;
-  
-  // TODO: add timer to measure the scoring time
+  std::cout << "Start scoring..............................." << std::flush;
+  auto score_beg = std::chrono::steady_clock::now();
+
   auto score = get_score<T>(Y[_num_layers % 2], num_inputs, _num_neurons_per_layer);
+
+  auto score_end = std::chrono::steady_clock::now();
+  std::cout << "finished scoring with "
+            << std::chrono::duration_cast<std::chrono::milliseconds>(score_end - score_beg).count()
+            << "ms"
+            << std::endl;
 
   checkCuda(cudaStreamDestroy(stream[0]));
   checkCuda(cudaStreamDestroy(stream[1]));
@@ -303,8 +341,8 @@ void GPUBaseline<T>::_non_empty_rows(
   
   nnz = 0;
 
-  for(int i = 0; i < num_inputs; ++i){
-    if(rlenY[i] > 0){
+  for(int i = 0; i < num_inputs; ++i) {
+    if(rlenY[i] > 0) {
       rowsY[nnz++] = i;
     }
   }

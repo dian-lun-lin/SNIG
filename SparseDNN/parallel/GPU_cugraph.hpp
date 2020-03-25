@@ -16,9 +16,12 @@ namespace sparse_dnn{
 
 template <typename T>
 class GPUCugraph {
-  
-  // TODO: refactor the file with what we did in cuda_baseline
 
+  static_assert(
+    std::is_same<T, float>::value || std::is_same<T, double>::value,
+    "data type must be either float or double"
+  );
+  
   private:
     
     int* _h_pinned_weight;
@@ -31,7 +34,12 @@ class GPUCugraph {
     int _pad;
     int _N_SLAB;
 
-    void _infer_flatten_graph(
+    int _p_w_index_len;
+    int _pp_w_index_len;
+    int _pp_wlen;
+    size_t _pp_wsize;
+
+    void _infer_flatterned_graph(
       T** Y,
       int** rowsY,
       int** rlenY,
@@ -39,7 +47,7 @@ class GPUCugraph {
       const int num_inputs
     ) const;
 
-    void _infer_update_graph(
+    void _infer_unflatterned_graph(
       T** Y,
       int** rowsY,
       int** rlenY,
@@ -58,9 +66,8 @@ class GPUCugraph {
 
     ~GPUCugraph();
 
-    int num_neurons_per_layer() const { return _num_neurons_per_layer; };
-    int num_layers() const { return _num_layers; };
-    T bias() const { return _bias; };
+    int num_neurons_per_layer() const;
+    int num_layers() const;
 
     Eigen::Matrix<int, Eigen::Dynamic, 1> infer(
       const std::fs::path& input_path,
@@ -85,6 +92,8 @@ GPUCugraph<T>::GPUCugraph(
   _num_neurons_per_layer{num_neurons_per_layer},
   _num_layers{num_layers}
 {
+  std::cout << "Constructing a GPU parallel network.\n";
+
   //get tuned shared memory size
   //num_neurons_per_layer must be divisible by shared memory (a.k.a. COL_BLK)
   //only for single GPU
@@ -92,39 +101,55 @@ GPUCugraph<T>::GPUCugraph(
   cudaDeviceProp props;
   cudaGetDeviceProperties(&props, 0);
   int max_num_per_block = props.sharedMemPerBlock / sizeof(T);
-  if(num_neurons_per_layer <= max_num_per_block){
+  if(num_neurons_per_layer <= max_num_per_block) {
     _COL_BLK = num_neurons_per_layer;
   }
   else{
     int max_divisor = 2;
-    while((num_neurons_per_layer % max_divisor != 0) || (max_num_per_block < (num_neurons_per_layer / max_divisor))){
+    while((num_neurons_per_layer % max_divisor != 0) || (max_num_per_block < (num_neurons_per_layer / max_divisor))) {
       ++max_divisor;
     }
     _COL_BLK = num_neurons_per_layer / max_divisor;
   }
 
-  std::cout << "Constructing a GPU parallel network.\n";
-  std::cout << "Loading the weight.............." << std::flush;
+  std::cout << "Loading the weight..........................." << std::flush;
+  auto reading_beg = std::chrono::steady_clock::now();
 
   _N_SLAB = num_neurons_per_layer / _COL_BLK; 
 
-  //_max_nnz_per_layer = find_max_nnz(weight_path, num_layers, num_neurons_per_layer);
-  _max_nnz_per_layer = find_max_nnz_binary(weight_path, num_layers, num_neurons_per_layer);
+  _max_nnz_per_layer = find_max_nnz_binary(
+                         weight_path,
+                         num_layers,
+                         num_neurons_per_layer
+                       );
+
+  // total length of row and col index
+  // value index should consider sizeof(T)
+  _p_w_index_len  = num_neurons_per_layer * _N_SLAB + _max_nnz_per_layer + 1;
 
   //handle aligned (only deal with double and float)
-  if((num_neurons_per_layer * _N_SLAB + 1 + _max_nnz_per_layer) % sizeof(T) != 0){
+  if(_p_w_index_len % sizeof(T) != 0){
     ++_pad;
   }
 
+  _pp_w_index_len = _p_w_index_len + _pad;
+
+  //pad packed weight length
+  _pp_wlen = _pp_w_index_len + (sizeof(T) / sizeof(float)) * _max_nnz_per_layer;
+  //pad packed weight size
+  _pp_wsize = sizeof(int) * (_pp_w_index_len) + sizeof(T) * _max_nnz_per_layer;
+
   checkCuda(cudaMallocHost(
     (void**)&_h_pinned_weight,
-    (sizeof(int) * (num_neurons_per_layer * _N_SLAB + 1 + _max_nnz_per_layer + _pad) +
-    sizeof(T) * _max_nnz_per_layer) * num_layers
+    _pp_wsize * num_layers
   ));
 
-  std::memset(_h_pinned_weight, 0, (sizeof(int) * (num_neurons_per_layer * _N_SLAB + 1 + _max_nnz_per_layer + _pad) + sizeof(T) * _max_nnz_per_layer) * num_layers);
+  std::memset(
+    _h_pinned_weight,
+    0,
+    _pp_wsize * num_layers
+  );
 
-  //read_weight<T>(weight_path, num_neurons_per_layer, _max_nnz_per_layer, num_layers, _COL_BLK, _N_SLAB, _pad, _h_pinned_weight);
   read_weight_binary<T>(
     weight_path,
     num_neurons_per_layer,
@@ -135,46 +160,54 @@ GPUCugraph<T>::GPUCugraph(
     _h_pinned_weight
   );
 
-  std::cout << "Done\n";
+  auto reading_end = std::chrono::steady_clock::now();
+  std::cout << "finished reading DNN layers with " 
+            << std::chrono::duration_cast<std::chrono::milliseconds>(reading_end - reading_beg).count()
+            << "ms"
+            << '\n';
 }
 
 template <typename T>
 GPUCugraph<T>::~GPUCugraph() {
-  
   checkCuda(cudaFreeHost(_h_pinned_weight));
+}
+
+template <typename T>
+int GPUCugraph<T>::num_neurons_per_layer() const {
+   return _num_neurons_per_layer; 
+}
+
+template <typename T>
+int GPUCugraph<T>::num_layers() const { 
+  return _num_layers; 
 }
 
 template <typename T>
 Eigen::Matrix<int, Eigen::Dynamic, 1> GPUCugraph<T>::infer(
   const std::fs::path& input_path,
   const int num_inputs,
-  const bool is_flatten
+  const bool is_flatterned
 ) const {
 
   std::cout << "Preprocessing.............................." << std::flush;
+  auto pp_beg = std::chrono::steady_clock::now();
 
   int *d_W[2];
   checkCuda(cudaMalloc(
     &d_W[0],
-    sizeof(int) * (_max_nnz_per_layer + _num_neurons_per_layer * _N_SLAB + 1 + _pad) + 
-    sizeof(T) * (_max_nnz_per_layer)
+    _pp_wsize
   ));
   checkCuda(cudaMalloc(
     &d_W[1],
-    sizeof(int) * (_max_nnz_per_layer + _num_neurons_per_layer * _N_SLAB + 1 + _pad) + 
-    sizeof(T) * (_max_nnz_per_layer)
+    _pp_wsize
   ));
   checkCuda(cudaMemcpy(
     d_W[0],
     _h_pinned_weight,
-    sizeof(int) * (_max_nnz_per_layer + _num_neurons_per_layer * _N_SLAB + 1 + _pad) + 
-    sizeof(T) * (_max_nnz_per_layer),
+    _pp_wsize,
     cudaMemcpyHostToDevice
   ));
 
-  std::cout << "Done" << std::endl;
-
-  std::cout << "Reading input.............................." << std::flush;
 
   T* Y[2];  
   int* rowsY[2];
@@ -198,21 +231,39 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUCugraph<T>::infer(
   int nerowsY{0};
   read_input_binary<T>(input_path, Y[0], rlenY[0], rowsY[0], nerowsY);
 
-
-  std::cout << "Done" << std::endl;
+  auto pp_end = std::chrono::steady_clock::now();
+  
+  std::cout << "finished preprocessing with " 
+            << std::chrono::duration_cast<std::chrono::milliseconds>(pp_end - pp_beg).count()
+            << "ms"
+            << std::endl;
 
   std::cout << "Start inference............................" << std::flush;
-  if(is_flatten){
-    // TODO it is flatterned not flatten
-    _infer_flatten_graph(Y, rowsY, rlenY, d_W, num_inputs);
+  auto exec_beg = std::chrono::steady_clock::now();
+
+  if(is_flatterned) {
+    _infer_flatterned_graph(Y, rowsY, rlenY, d_W, num_inputs);
   }
   else{
-    // TODO: _infer_unflatterned_graph 
-    _infer_update_graph(Y, rowsY, rlenY, d_W, num_inputs);
+    _infer_unflatterned_graph(Y, rowsY, rlenY, d_W, num_inputs);
   }
+
+  auto exec_end = std::chrono::steady_clock::now();
+  std::cout << "finished execution with "
+            << std::chrono::duration_cast<std::chrono::milliseconds>(exec_end - exec_beg).count()
+            << "ms"
+            << std::endl;
+
+  std::cout << "Start scoring..............................." << std::flush;
+  auto score_beg = std::chrono::steady_clock::now();
 
   auto score = get_score<T>(Y[_num_layers % 2], num_inputs, _num_neurons_per_layer);
 
+  auto score_end = std::chrono::steady_clock::now();
+  std::cout << "finished scoring with "
+            << std::chrono::duration_cast<std::chrono::milliseconds>(score_end - score_beg).count()
+            << "ms"
+            << std::endl;
 
   checkCuda(cudaFree(Y[0]));
   checkCuda(cudaFree(Y[1]));
@@ -227,7 +278,7 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUCugraph<T>::infer(
 }
 
 template <typename T>
-void GPUCugraph<T>::_infer_update_graph(
+void GPUCugraph<T>::_infer_unflatterned_graph(
   T** Y,
   int** rowsY,
   int** rlenY,
@@ -240,8 +291,7 @@ void GPUCugraph<T>::_infer_update_graph(
   std::vector<cudaGraphNode_t> cpy_dependencies;
   std::vector<cudaGraphNode_t> infer_dependencies;
   cudaGraphNode_t memcpy_node, infer_node, memset_node;
-  checkCuda(cudaStreamCreateWithFlags(&stream_for_graph, cudaStreamNonBlocking));
-
+  checkCuda(cudaStreamCreate(&stream_for_graph));
   checkCuda(cudaGraphCreate(&graph, 0));
 
   cudaMemcpy3DParms memcpy_params = {0};
@@ -250,30 +300,28 @@ void GPUCugraph<T>::_infer_update_graph(
 
   int cur_layer = 0;
   
-  // TODO (DL): PLEASE alias the operations to avoid duplicate 
   //memcpy
   memcpy_params.srcPtr        = make_cudaPitchedPtr(
-    _h_pinned_weight + (cur_layer + 1) * (_num_neurons_per_layer * _N_SLAB + 1 + _max_nnz_per_layer + _pad + ((sizeof(T) / sizeof(int)) * _max_nnz_per_layer)),
-    sizeof(int) * (_num_neurons_per_layer * _N_SLAB + 1 + _max_nnz_per_layer + _pad) + sizeof(T) * (_max_nnz_per_layer),
-    (_num_neurons_per_layer * _N_SLAB + 1 + _pad + _max_nnz_per_layer) + (sizeof(T) / sizeof(int)) * (_max_nnz_per_layer),
-    1
-  );
+                                  _h_pinned_weight + (cur_layer + 1) * (_pp_wlen),
+                                  _pp_wsize,
+                                  _pp_wlen,
+                                  1
+                                );
   memcpy_params.srcArray      = NULL;
   memcpy_params.srcPos        = make_cudaPos(0, 0, 0);
   memcpy_params.dstPtr        = make_cudaPitchedPtr(
-    d_W[(cur_layer + 1) % 2],
-    sizeof(int) * (_num_neurons_per_layer * _N_SLAB + 1 + _max_nnz_per_layer + _pad) + sizeof(T) * (_max_nnz_per_layer),
-    (_num_neurons_per_layer * _N_SLAB + 1 + _pad + _max_nnz_per_layer) + (sizeof(T) / sizeof(int)) * (_max_nnz_per_layer),
-    1
-  );
+                                  d_W[(cur_layer + 1) % 2],
+                                  _pp_wsize,
+                                  _pp_wlen,
+                                  1
+                                );
   memcpy_params.dstArray      = NULL;
   memcpy_params.dstPos        = make_cudaPos(0, 0, 0);
   memcpy_params.extent        = make_cudaExtent(
-    sizeof(int) * (_max_nnz_per_layer + _num_neurons_per_layer * _N_SLAB + 1 + _pad) + 
-    sizeof(T) * (_max_nnz_per_layer),
-    1,
-    1
-  );
+                                  _pp_wsize,
+                                  1,
+                                  1
+                                );
   memcpy_params.kind          = cudaMemcpyHostToDevice;
 
   checkCuda(cudaGraphAddMemcpyNode(
@@ -287,10 +335,9 @@ void GPUCugraph<T>::_infer_update_graph(
   //infer
   int* roffW = d_W[cur_layer % 2];
   int* colsW = d_W[cur_layer % 2] + _num_neurons_per_layer * _N_SLAB + 1;
-  T* valsW = (T*)(d_W[cur_layer % 2] + _num_neurons_per_layer * _N_SLAB + 1 + _max_nnz_per_layer);
+  T* valsW = (T*)(d_W[cur_layer % 2] + _p_w_index_len);
   
-  // TODO: you don't need to hard-code 12
-  void* infer_args[12] = {
+  void* infer_args[] = {
     (void*)&Y[cur_layer % 2],
     (void*)&rowsY[cur_layer % 2],
     (void*)&rlenY[cur_layer % 2],
@@ -340,12 +387,8 @@ void GPUCugraph<T>::_infer_update_graph(
   );
 
   cudaGraphExec_t exec;
-  auto begin = std::chrono::steady_clock::now();
   checkCuda(cudaGraphInstantiate(&exec, graph, NULL, NULL, 0));
-  auto end = std::chrono::steady_clock::now();
-  std::cout <<"Initial: " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
 
-  begin = std::chrono::steady_clock::now();
   checkCuda(cudaGraphLaunch(exec, stream_for_graph));
   checkCuda(cudaStreamSynchronize(stream_for_graph));
   //update
@@ -353,26 +396,26 @@ void GPUCugraph<T>::_infer_update_graph(
 
     if(cur_layer != _num_layers - 1) {
       memcpy_params.srcPtr = make_cudaPitchedPtr(
-        _h_pinned_weight + (cur_layer + 1) * (_num_neurons_per_layer * _N_SLAB + 1 + _max_nnz_per_layer + _pad + ((sizeof(T) / sizeof(int)) * _max_nnz_per_layer)),
-        sizeof(int) * (_num_neurons_per_layer * _N_SLAB + 1 + _max_nnz_per_layer + _pad) + sizeof(T) * (_max_nnz_per_layer),
-        (_num_neurons_per_layer * _N_SLAB + 1 + _pad + _max_nnz_per_layer) + (sizeof(T) / sizeof(int)) * (_max_nnz_per_layer),
-        1
-      );
+                               _h_pinned_weight + (cur_layer + 1) * _pp_wlen,
+                               _pp_wsize,
+                               _pp_wlen,
+                               1
+                              );
 
       memcpy_params.dstPtr = make_cudaPitchedPtr(
-        d_W[(cur_layer + 1) % 2],
-        sizeof(int) * (_num_neurons_per_layer * _N_SLAB + 1 + _max_nnz_per_layer + _pad) + sizeof(T) * (_max_nnz_per_layer),
-        (_num_neurons_per_layer * _N_SLAB + 1 + _pad + _max_nnz_per_layer) + (sizeof(T) / sizeof(int)) * (_max_nnz_per_layer),
-        1
-      );
+                               d_W[(cur_layer + 1) % 2],
+                               _pp_wsize,
+                               _pp_wlen,
+                               1
+                              );
 
       checkCuda(cudaGraphExecMemcpyNodeSetParams(exec, memcpy_node, &memcpy_params));
     }
 
     roffW = d_W[cur_layer % 2];
     colsW = d_W[cur_layer % 2] + _num_neurons_per_layer * _N_SLAB + 1;
-    valsW = (T*)(d_W[cur_layer % 2] + _num_neurons_per_layer * _N_SLAB + 1 + _max_nnz_per_layer);
-    void* infer_args[12] = {
+    valsW = (T*)(d_W[cur_layer % 2] + _p_w_index_len);
+    void* infer_args[] = {
       (void*)&Y[cur_layer % 2],
       (void*)&rowsY[cur_layer % 2],
       (void*)&rlenY[cur_layer % 2],
@@ -396,9 +439,6 @@ void GPUCugraph<T>::_infer_update_graph(
     checkCuda(cudaStreamSynchronize(stream_for_graph));
   }
 
-  end = std::chrono::steady_clock::now();
-  std::cout << "Exec and update: " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
-
   checkCuda(cudaGraphExecDestroy(exec));
   checkCuda(cudaGraphDestroy(graph));
   checkCuda(cudaStreamDestroy(stream_for_graph));
@@ -407,21 +447,20 @@ void GPUCugraph<T>::_infer_update_graph(
 
 
 template <typename T>
-void GPUCugraph<T>::_infer_flatten_graph(
+void GPUCugraph<T>::_infer_flatterned_graph(
   T** Y,
   int** rowsY,
   int** rlenY,
   int** d_W,
   const int num_inputs
 ) const {
-  
   dim3 threads(32, 32, 1);
   cudaStream_t stream_for_graph;
   cudaGraph_t graph;
   std::vector<cudaGraphNode_t> cpy_dependencies;
   std::vector<cudaGraphNode_t> infer_dependencies;
   cudaGraphNode_t memcpy_node, infer_node, memset_node;
-  checkCuda(cudaStreamCreateWithFlags(&stream_for_graph, cudaStreamNonBlocking));
+  checkCuda(cudaStreamCreate(&stream_for_graph));
 
   checkCuda(cudaGraphCreate(&graph, 0));
 
@@ -435,11 +474,10 @@ void GPUCugraph<T>::_infer_flatten_graph(
   memcpy_params.dstArray      = NULL;
   memcpy_params.dstPos        = make_cudaPos(0, 0, 0);
   memcpy_params.extent        = make_cudaExtent(
-    sizeof(int) * (_max_nnz_per_layer + _num_neurons_per_layer * _N_SLAB + 1 + _pad) + 
-    sizeof(T) * (_max_nnz_per_layer),
-    1,
-    1
-  );
+                                  _pp_wsize,
+                                  1,
+                                  1
+                                );
   memcpy_params.kind          = cudaMemcpyHostToDevice;
 
   //infer
@@ -456,23 +494,22 @@ void GPUCugraph<T>::_infer_flatten_graph(
   memset_params.width         = _num_neurons_per_layer * num_inputs * (sizeof(T) / sizeof(float)); 
   memset_params.height        = 1;
 
-  auto begin = std::chrono::steady_clock::now();
   for(int cur_layer = 0; cur_layer < _num_layers; ++cur_layer) {
 
     if(cur_layer != _num_layers - 1) {
       memcpy_params.srcPtr = make_cudaPitchedPtr(
-        _h_pinned_weight + (cur_layer + 1) * (_num_neurons_per_layer * _N_SLAB + 1 + _max_nnz_per_layer + _pad + ((sizeof(T) / sizeof(int)) * _max_nnz_per_layer)),
-        sizeof(int) * (_num_neurons_per_layer * _N_SLAB + 1 + _max_nnz_per_layer + _pad) + sizeof(T) * (_max_nnz_per_layer),
-        (_num_neurons_per_layer * _N_SLAB + 1 + _pad + _max_nnz_per_layer) + (sizeof(T) / sizeof(int)) * (_max_nnz_per_layer),
-        1
-      );
+                                _h_pinned_weight + (cur_layer + 1) * (_pp_wlen),
+                                _pp_wsize,
+                                _pp_wlen,
+                                1
+                              );
 
       memcpy_params.dstPtr = make_cudaPitchedPtr(
-        d_W[(cur_layer + 1) % 2],
-        sizeof(int) * (_num_neurons_per_layer * _N_SLAB + 1 + _max_nnz_per_layer + _pad) + sizeof(T) * (_max_nnz_per_layer),
-        (_num_neurons_per_layer * _N_SLAB + 1 + _pad + _max_nnz_per_layer) + (sizeof(T) / sizeof(int)) * (_max_nnz_per_layer),
-        1
-      );
+                                d_W[(cur_layer + 1) % 2],
+                                _pp_wsize,
+                                _pp_wlen,
+                                1
+                              );
 
       checkCuda(cudaGraphAddMemcpyNode(
         &memcpy_node,
@@ -486,9 +523,9 @@ void GPUCugraph<T>::_infer_flatten_graph(
 
     int* roffW = d_W[cur_layer % 2];
     int* colsW = d_W[cur_layer % 2] + _num_neurons_per_layer * _N_SLAB + 1;
-    T* valsW = (T*)(d_W[cur_layer % 2] + _num_neurons_per_layer * _N_SLAB + 1 + _max_nnz_per_layer);
+    T* valsW = (T*)(d_W[cur_layer % 2] + _p_w_index_len);
 
-    void* infer_args[12] = {
+    void* infer_args[] = {
       (void*)&Y[cur_layer % 2],
       (void*)&rowsY[cur_layer % 2],
       (void*)&rlenY[cur_layer % 2],
@@ -533,23 +570,13 @@ void GPUCugraph<T>::_infer_flatten_graph(
     cpy_dependencies.push_back(infer_node);
   }
 
-  std::cout << std::endl;
-  auto end = std::chrono::steady_clock::now();
-  std::cout << "Add nodes:" << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
 
   cudaGraphExec_t exec;
 
-  begin = std::chrono::steady_clock::now();
   checkCuda(cudaGraphInstantiate(&exec, graph, NULL, NULL, 0));
-  end = std::chrono::steady_clock::now();
-  std::cout <<"Initial: " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
 
-  begin = std::chrono::steady_clock::now();
   checkCuda(cudaGraphLaunch(exec, stream_for_graph));
-
   checkCuda(cudaStreamSynchronize(stream_for_graph));
-  end = std::chrono::steady_clock::now();
-  std::cout <<"Exec: " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
 
   checkCuda(cudaGraphExecDestroy(exec));
   checkCuda(cudaGraphDestroy(graph));

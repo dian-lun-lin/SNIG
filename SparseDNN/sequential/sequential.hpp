@@ -40,8 +40,8 @@ class Sequential {
 
     ~Sequential();
 
-    int num_neurons_per_layer() const { return _num_neurons_per_layer; };
-    int num_layers() const { return _num_layers; };
+    int num_neurons_per_layer() const;
+    int num_layers() const;
 
     Eigen::Matrix<int, Eigen::Dynamic, 1> infer(
         const std::fs::path& input_path,
@@ -76,6 +76,16 @@ Sequential<T>::~Sequential() {
 }
 
 template <typename T>
+int Sequential<T>::num_neurons_per_layer() const { 
+  return _num_neurons_per_layer; 
+}
+
+template <typename T>
+int Sequential<T>::num_layers() const { 
+  return _num_layers; 
+}
+
+template <typename T>
 Eigen::Matrix<int, Eigen::Dynamic, 1> Sequential<T>::infer(
   const std::fs::path& input_path,
   const int num_inputs
@@ -87,7 +97,7 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> Sequential<T>::infer(
 
   std::cout << "Start inference............................" << std::flush;
 
-  for(const auto& w : _weights){
+  for(const auto& w : _weights) {
     Eigen::SparseMatrix<T> z(num_inputs, _num_neurons_per_layer);
     z = (y * w).pruned();
     z.coeffs() += _bias;
