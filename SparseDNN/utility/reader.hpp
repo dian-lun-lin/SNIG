@@ -148,12 +148,35 @@ void read_input(
 );
 
 template <typename T>
+void read_input(
+  const std::fs::path& input_path,
+  const int num_features,
+  const int batch_size,
+  T* arr
+);
+
+template <typename T>
 void read_input_binary(
   const std::fs::path& input_path,
   T* arr,
   int* rlenY,
   int* rowsY,
   int& nerowsY
+);
+
+template <typename T>
+void read_input_binary(
+  const std::fs::path& input_path,
+  const int batch_size,
+  T* arr
+);
+
+template <typename T>
+void read_input_binary(
+  const std::fs::path& input_path,
+  const int batch_size,
+  T* arr,
+  bool* rowsY
 );
 
 inline
@@ -578,6 +601,7 @@ void read_input(
   tsv_string_to_CSR_matrix<T>(s, num_inputs, num_features, nnz, mat);
 }
 
+
 template <typename T>
 void read_input_binary(
   const std::fs::path& input_path,
@@ -608,6 +632,57 @@ void read_input_binary(
                  [](T v){ return v != 0;}
                );
     rowsY[nerowsY++] = i;
+  }
+}
+template <typename T>
+void read_input_binary(
+  const std::fs::path& input_path,
+  const int batch_size,
+  T* arr
+) {
+  //T is the floating posize_t type, either float or double
+  static_assert(
+    std::is_same<T, float>::value || std::is_same<T, double>::value,
+    "data type must be either float or double"
+  );
+
+  std::fs::path p = input_path;
+  std::ifstream in(p, std::ios::in | std::ios::binary);
+  int num_inputs;
+  int num_features;
+  in.read((char*)&num_inputs, sizeof(int));
+  in.read((char*)&num_features, sizeof(int));
+  in.read((char*)arr, sizeof(T) * num_inputs * num_features);
+}
+
+template <typename T>
+void read_input_binary(
+  const std::fs::path& input_path,
+  const int batch_size,
+  T* arr,
+  bool* rowsY
+) {
+  //T is the floating posize_t type, either float or double
+  static_assert(
+    std::is_same<T, float>::value || std::is_same<T, double>::value,
+    "data type must be either float or double"
+  );
+
+  std::fs::path p = input_path;
+  std::ifstream in(p, std::ios::in | std::ios::binary);
+  int num_inputs;
+  int num_features;
+  in.read((char*)&num_inputs, sizeof(int));
+  in.read((char*)&num_features, sizeof(int));
+  in.read((char*)arr, sizeof(T) * num_inputs * num_features);
+
+  for(int i = 0; i < batch_size; ++i) {
+    auto it  = std::find_if(
+                 arr + i * num_features,
+                 arr + (i + 1) * num_features,
+                 [](T v){ return v != 0;}
+               );
+    rowsY[i] = (it != arr + (i + 1) * num_features) ? true : false;
   }
 }
 
@@ -809,8 +884,9 @@ void tsv_file_to_binary_file(
   input_path /= "sparse-images-" + std::to_string(cols) + ".tsv";
   auto data_str = read_file_to_string(input_path);
 
-  auto data_array = std::make_unique<T[]>(rows * cols);
-  std::memset(data_array.get(), 0, sizeof(T) * rows * cols);
+  T data_array[rows * cols] = {0};
+  //auto data_array = std::make_unique<T[]>(rows * cols);
+  //std::memset(data_array, 0, sizeof(T) * rows * cols);
 
   std::istringstream read_s(data_str);
   std::vector<std::string> tokens;
@@ -823,7 +899,7 @@ void tsv_file_to_binary_file(
     while(std::getline(lineStream, token, '\t')) {
       tokens.push_back(std::move(token));
     }
-    *(data_array.get() + (std::stoi(tokens[0]) - 1) * cols + std::stoi(tokens[1]) - 1) = to_numeric<T>(tokens[2]);
+    *(data_array + (std::stoi(tokens[0]) - 1) * cols + std::stoi(tokens[1]) - 1) = to_numeric<T>(tokens[2]);
   }
 
   std::fs::path p = input_path.parent_path();
@@ -832,7 +908,7 @@ void tsv_file_to_binary_file(
   std::ofstream out(p, std::ios::out | std::ios::binary);
   out.write((char*)&rows, sizeof(int));
   out.write((char*)&cols, sizeof(int));
-  out.write((char*)data_array.get(), sizeof(T) * (rows * cols));
+  out.write((char*)data_array, sizeof(T) * (rows * cols));
 }
 
 template <typename T>
