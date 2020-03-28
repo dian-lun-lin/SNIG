@@ -9,13 +9,13 @@
 
 namespace sparse_dnn{
 
-struct HostNerowArgs{
-  int num_inputs;
-  int update_layer;
-  int** rlenY;
-  int** rowsY;
-  int* nerowsY;
-};
+//struct HostNerowArgs{
+  //int num_inputs;
+  //int update_layer;
+  //int** rlenY;
+  //int** rowsY;
+  //int* nerowsY;
+//};
 
 inline
 void cusparse_mutiplication(
@@ -51,12 +51,12 @@ template <typename T>
 __global__ 
 void baseline_inference(
   const T* Y0,
-  const int nerowsY,
+  const size_t nerowsY,
   const int* rowsY0,
   int* rlenY0,
-  const int COL_BLK,
-  const int N_SLAB,
-  const int num_neurons_per_layer,
+  const size_t COL_BLK,
+  const size_t N_SLAB,
+  const size_t num_neurons_per_layer,
   const int* roffW,
   const int* colsW,
   const T* valsW,
@@ -71,9 +71,9 @@ void wo_host_inference(
   const T* Y0,
   const int* rowsY0,
   int* rlenY0,
-  const int COL_BLK,
-  const int N_SLAB,
-  const int num_neurons_per_layer,
+  const size_t COL_BLK,
+  const size_t N_SLAB,
+  const size_t num_neurons_per_layer,
   const int* roffW,
   const int* colsW,
   const T* valsW,
@@ -87,9 +87,9 @@ __global__
 void wo_host_inference_test(
   const T* Y0,
   const bool* rowsY0,
-  const int COL_BLK,
-  const int N_SLAB,
-  const int num_neurons_per_layer,
+  const size_t COL_BLK,
+  const size_t N_SLAB,
+  const size_t num_neurons_per_layer,
   const int* roffW,
   const int* colsW,
   const T* valsW,
@@ -318,12 +318,12 @@ template <typename T>
 __global__ 
 void baseline_inference(
   const T* Y0,
-  const int nerowsY,
+  const size_t nerowsY,
   const int* rowsY0,
   int* rlenY0,
-  const int COL_BLK,
-  const int N_SLAB,
-  const int num_neurons_per_layer,
+  const size_t COL_BLK,
+  const size_t N_SLAB,
+  const size_t num_neurons_per_layer,
   const int* roffW,
   const int* colsW,
   const T* valsW,
@@ -345,13 +345,13 @@ void baseline_inference(
     rlenY0[rid] = 0;
     rlenY1[rid] = 0;
   }
-  for(int i = 0; i < N_SLAB; i++) {
+  for(size_t i = 0; i < N_SLAB; i++) {
     __syncthreads();
-    for(int j = threadIdx.x; j < COL_BLK; j++) {
+    for(size_t j = threadIdx.x; j < COL_BLK; j++) {
       shRow[j] = 0;  
     }
     __syncthreads();
-    for(int j = threadIdx.y; j < num_neurons_per_layer; j += blockDim.y) {
+    for(size_t j = threadIdx.y; j < num_neurons_per_layer; j += blockDim.y) {
       T valY = Y0[rid * num_neurons_per_layer + j];
       if(valY == 0) {
         continue;
@@ -366,7 +366,7 @@ void baseline_inference(
     }
     __syncthreads();
     int count = 0;
-    for(int j = 0; j < COL_BLK; j += blockDim.x * blockDim.y) {
+    for(size_t j = 0; j < COL_BLK; j += blockDim.x * blockDim.y) {
       T v = j + tid < COL_BLK ? shRow[j + tid] + bias : -1;
       count += __syncthreads_count(v > 0);
       if(j + tid < COL_BLK) {
@@ -386,9 +386,9 @@ void wo_host_inference(
   const T* Y0,
   const int* rowsY0,
   int* rlenY0,
-  const int COL_BLK,
-  const int N_SLAB,
-  const int num_neurons_per_layer,
+  const size_t COL_BLK,
+  const size_t N_SLAB,
+  const size_t num_neurons_per_layer,
   const int* roffW,
   const int* colsW,
   const T* valsW,
@@ -409,13 +409,13 @@ void wo_host_inference(
     rlenY0[blockIdx.x] = 0;
     rlenY1[blockIdx.x] = 0;
   }
-  for(int i = 0; i < N_SLAB; i++){
+  for(size_t i = 0; i < N_SLAB; i++){
     __syncthreads();
-    for(int j = tid; j < COL_BLK; j += blockDim.x * blockDim.y) {
+    for(size_t j = tid; j < COL_BLK; j += blockDim.x * blockDim.y) {
       shRow[j] = 0;  
     }
     __syncthreads();
-    for(int j = threadIdx.y; j < num_neurons_per_layer; j += blockDim.y) {
+    for(size_t j = threadIdx.y; j < num_neurons_per_layer; j += blockDim.y) {
       T valY = Y0[blockIdx.x * num_neurons_per_layer + j];
       if(valY == 0) {
         continue;
@@ -430,7 +430,7 @@ void wo_host_inference(
     }
     __syncthreads();
     int count = 0;
-    for(int j = 0; j < COL_BLK; j += blockDim.x * blockDim.y) {
+    for(size_t j = 0; j < COL_BLK; j += blockDim.x * blockDim.y) {
       T v = j + tid < COL_BLK ? shRow[j + tid] + bias : -1;
       count += __syncthreads_count(v > 0);
       if(j + tid < COL_BLK) {
@@ -449,9 +449,9 @@ __global__
 void wo_host_inference_test(
   const T* Y0,
   const bool* rowsY0,
-  const int COL_BLK,
-  const int N_SLAB,
-  const int num_neurons_per_layer,
+  const size_t COL_BLK,
+  const size_t N_SLAB,
+  const size_t num_neurons_per_layer,
   const int* roffW,
   const int* colsW,
   const T* valsW,
@@ -471,13 +471,13 @@ void wo_host_inference_test(
 
   int tid = threadIdx.y * blockDim.x + threadIdx.x;
   __syncthreads();
-  for(int i = 0; i < N_SLAB; i++) {
+  for(size_t i = 0; i < N_SLAB; i++) {
     __syncthreads();
-    for(int j = tid; j < COL_BLK; j += blockDim.x * blockDim.y) {
+    for(size_t j = tid; j < COL_BLK; j += blockDim.x * blockDim.y) {
       shRow[j] = 0;  
     }
     __syncthreads();
-    for(int j = threadIdx.y; j < num_neurons_per_layer; j += blockDim.y) {
+    for(size_t j = threadIdx.y; j < num_neurons_per_layer; j += blockDim.y) {
       T valY = Y0[blockIdx.x * num_neurons_per_layer + j];
       if(valY == 0) {
         continue;
@@ -491,7 +491,7 @@ void wo_host_inference_test(
       }
     }
     __syncthreads();
-    for(int j = 0; j < COL_BLK; j += blockDim.x * blockDim.y) {
+    for(size_t j = 0; j < COL_BLK; j += blockDim.x * blockDim.y) {
       T v = j + tid < COL_BLK ? shRow[j + tid] + bias : -1;
       if(j + tid < COL_BLK){
         Y1[blockIdx.x * num_neurons_per_layer + i * COL_BLK + j + tid] = min(T(32), max(T(0), v));

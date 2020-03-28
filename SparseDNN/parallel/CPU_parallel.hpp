@@ -25,8 +25,8 @@ class CPUParallel {
   private:
 
     std::vector<Eigen::SparseMatrix<T> > _weights;
-    const int _num_neurons_per_layer;
-    const int _num_layers;
+    const size_t _num_neurons_per_layer;
+    const size_t _num_layers;
     const T _bias;
 
     Eigen::Matrix<int, Eigen::Dynamic, 1> _data_parallel_task(
@@ -38,18 +38,18 @@ class CPUParallel {
     CPUParallel(
       const std::fs::path& wieght_path,
       const T bias,
-      const int num_neurons_per_layer=1024,
-      const int num_layers=120
+      const size_t num_neurons_per_layer=1024,
+      const size_t num_layers=120
       );
 
     ~CPUParallel();
 
-    int num_neurons_per_layer() const;
-    int num_layers() const;
+    size_t num_neurons_per_layer() const;
+    size_t num_layers() const;
 
     Eigen::Matrix<int, Eigen::Dynamic, 1> infer(
       const std::fs::path& input_path,
-      const int num_inputs
+      const size_t num_inputs
       ) const;
 };
 
@@ -61,8 +61,8 @@ template<typename T>
 CPUParallel<T>::CPUParallel(
   const std::fs::path& weight_path,
   const T bias,
-  const int num_neurons_per_layer,
-  const int num_layers
+  const size_t num_neurons_per_layer,
+  const size_t num_layers
 ):
   _bias{bias},
   _num_neurons_per_layer{num_neurons_per_layer},
@@ -80,19 +80,19 @@ CPUParallel<T>::~CPUParallel() {
 }
 
 template<typename T>
-int CPUParallel<T>::num_neurons_per_layer() const { 
+size_t CPUParallel<T>::num_neurons_per_layer() const { 
   return _num_neurons_per_layer; 
 }
 
 template<typename T>
-int CPUParallel<T>::num_layers() const { 
+size_t CPUParallel<T>::num_layers() const { 
   return _num_layers; 
 }
 
 template<typename T>
 Eigen::Matrix<int, Eigen::Dynamic, 1> CPUParallel<T>::infer(
   const std::fs::path& input_path,
-  const int num_inputs
+  const size_t num_inputs
 ) const {
 
   std::cout << "Reading input.............................." << std::flush;
@@ -102,8 +102,8 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> CPUParallel<T>::infer(
   std::cout << "Start inference............................" << std::flush;
   Eigen::SparseVector<T> result;
 
-  int num_tasks = 128;
-  int num_threads = std::thread::hardware_concurrency();
+  size_t num_tasks = 32;
+  size_t num_threads = std::thread::hardware_concurrency();
   ThreadPool pool(num_threads);
 
   auto slicing_inputs = slice_by_row<T>(input, num_tasks);

@@ -3,6 +3,7 @@
 #include <SparseDNN/utility/matrix_format.h>
 #include <SparseDNN/utility/cuda_error.hpp>
 #include <SparseDNN/utility/scoring.hpp>
+#include <SparseDNN/utility/utility.hpp>
 #include <SparseDNN/parallel/task.hpp>
 #include <chrono>
 
@@ -23,24 +24,24 @@ class GPUBaseline {
   private:
     int* _h_pinned_weight;
     T _bias;
-    int _num_neurons_per_layer;
-    int _num_layers;
+    size_t _num_neurons_per_layer;
+    size_t _num_layers;
 
-    int _max_nnz_per_layer;
-    int _COL_BLK;
-    int _pad;
-    int _N_SLAB;
+    size_t _max_nnz_per_layer;
+    size_t _COL_BLK;
+    size_t _pad;
+    size_t _N_SLAB;
 
-    int _p_w_index_len;
-    int _pp_w_index_len;
-    int _pp_wlen;
+    size_t _p_w_index_len;
+    size_t _pp_w_index_len;
+    size_t _pp_wlen;
     size_t _pp_wsize;
 
     void _non_empty_rows(
-      const int num_inputs,
+      const size_t num_inputs,
       int* rlenY,
       int* rowsY,
-      int& nnz
+      size_t& nnz
     ) const;
 
   public:
@@ -48,19 +49,19 @@ class GPUBaseline {
     GPUBaseline(
       const std::fs::path& weight_path,
       const T bias = -.3f,
-      const int num_neurons_per_layer = 1024,
-      const int num_layers = 120
+      const size_t num_neurons_per_layer = 1024,
+      const size_t num_layers = 120
     );
 
     ~GPUBaseline();
     
-    int num_neurons_per_layer() const;
+    size_t num_neurons_per_layer() const;
 
-    int num_layers() const;
+    size_t num_layers() const;
 
     Eigen::Matrix<int, Eigen::Dynamic, 1> infer(
       const std::fs::path& input_path,
-      const int num_inputs
+      const size_t num_inputs
     ) const;
 
 };
@@ -73,8 +74,8 @@ template <typename T>
 GPUBaseline<T>::GPUBaseline(
   const std::fs::path& weight_path,
   const T bias,
-  const int num_neurons_per_layer,
-  const int num_layers
+  const size_t num_neurons_per_layer,
+  const size_t num_layers
 ):
   _bias{bias},
   _num_neurons_per_layer{num_neurons_per_layer},
@@ -89,7 +90,7 @@ GPUBaseline<T>::GPUBaseline(
   //only for double float
   cudaDeviceProp props;
   cudaGetDeviceProperties(&props, 0);
-  int max_num_per_block = props.sharedMemPerBlock / sizeof(T);
+  size_t max_num_per_block = props.sharedMemPerBlock / sizeof(T);
   if(num_neurons_per_layer <= max_num_per_block) {
     _COL_BLK = num_neurons_per_layer;
   }
@@ -163,19 +164,19 @@ GPUBaseline<T>:: ~GPUBaseline() {
 }
 
 template <typename T>
-int GPUBaseline<T>::num_neurons_per_layer() const {
+size_t GPUBaseline<T>::num_neurons_per_layer() const {
  return _num_neurons_per_layer; 
 }
 
 template <typename T>
-int GPUBaseline<T>::num_layers() const { 
+size_t GPUBaseline<T>::num_layers() const { 
   return _num_layers; 
 }
 
 template <typename T>
 Eigen::Matrix<int, Eigen::Dynamic, 1> GPUBaseline<T>::infer(
 const std::fs::path& input_path,
-  const int num_inputs
+  const size_t num_inputs
 ) const {
 
   std::cout << "Preprocessing.............................." << std::flush;
@@ -217,7 +218,7 @@ const std::fs::path& input_path,
   checkCuda(cudaMemset(rlenY[1], 0, sizeof(int) * num_inputs));
   checkCuda(cudaDeviceSynchronize());
 
-  int nerowsY{0};
+  size_t nerowsY{0};
   read_input_binary<T>(input_path, Y[0], rlenY[0], rowsY[0], nerowsY);
 
   auto pp_end = std::chrono::steady_clock::now();
@@ -238,7 +239,7 @@ const std::fs::path& input_path,
 
   dim3 threads_dim(32, 32, 1);
 
-  for(int cur_layer = 0; cur_layer < _num_layers - 1; ++cur_layer){
+  for(size_t cur_layer = 0; cur_layer < _num_layers - 1; ++cur_layer) {
     
     checkCuda(cudaMemcpyAsync(
       d_W[(cur_layer + 1) % 2],
@@ -333,15 +334,15 @@ const std::fs::path& input_path,
 
 template <typename T>
 void GPUBaseline<T>::_non_empty_rows(
-  const int num_inputs,
+  const size_t num_inputs,
   int* rlenY,
   int* rowsY,
-  int& nnz
+  size_t& nnz
 ) const {
   
   nnz = 0;
 
-  for(int i = 0; i < num_inputs; ++i) {
+  for(size_t i = 0; i < num_inputs; ++i) {
     if(rlenY[i] > 0) {
       rowsY[nnz++] = i;
     }

@@ -65,6 +65,8 @@ int main(int argc, char* argv[]) {
   );
   CLI11_PARSE(app, argc, argv);
   Eigen::Matrix<int, Eigen::Dynamic, 1> result;
+
+  //binary format is not completed yet.
   //if(mode == "GPU_cusparse") {
     //sparse_dnn::GPUCusparse<float> GPU_cusparse(
       //weight_path, 
@@ -99,7 +101,7 @@ int main(int argc, char* argv[]) {
       num_neurons_per_layer, 
       num_layers
     );
-    result = GPU_decompose.infer(input_path, 60000, 4000, 10);
+    result = GPU_decompose.infer(input_path, 60000, 5000, 10);
   }
   auto golden = sparse_dnn::read_golden_binary(golden_path);
   if(sparse_dnn::is_passed(result, golden)) {

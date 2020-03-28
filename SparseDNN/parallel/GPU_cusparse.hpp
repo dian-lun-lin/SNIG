@@ -11,6 +11,8 @@ namespace std{
 }
 
 namespace sparse_dnn {
+
+//cusparse's args take int type
 template <typename T>
 class GPUCusparse{
     

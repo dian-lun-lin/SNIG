@@ -26,17 +26,17 @@ class GPUDecomp {
     
     int* _h_pinned_weight;
     T _bias;
-    int _num_neurons_per_layer;
-    int _num_layers;
+    size_t _num_neurons_per_layer;
+    size_t _num_layers;
 
-    int _max_nnz_per_layer;
-    int _COL_BLK;
-    int _pad;
-    int _N_SLAB;
+    size_t _max_nnz_per_layer;
+    size_t _COL_BLK;
+    size_t _pad;
+    size_t _N_SLAB;
 
-    int _p_w_index_len;
-    int _pp_w_index_len;
-    int _pp_wlen;
+    size_t _p_w_index_len;
+    size_t _pp_w_index_len;
+    size_t _pp_wlen;
     size_t _pp_wsize;
 
     void _infer_flatterned_graph(
@@ -44,10 +44,10 @@ class GPUDecomp {
       T** Y,
       bool** rowsY,
       int** d_W,
-      const int num_inputs,
-      const int num_buff,
-      const int batch_size,
-      const int batch_ylen,
+      const size_t num_inputs,
+      const size_t num_buff,
+      const size_t batch_size,
+      const size_t batch_ylen,
       const size_t batch_ysize
     ) const;
 
@@ -56,20 +56,20 @@ class GPUDecomp {
     GPUDecomp(
       const std::fs::path& weight_path,
       const T bias = -.3f,
-      const int num_neurons_per_layer = 1024,
-      const int num_layers = 120
+      const size_t num_neurons_per_layer = 1024,
+      const size_t num_layers = 120
     );
 
     ~GPUDecomp();
 
-    int num_neurons_per_layer() const;
-    int num_layers() const;
+    size_t num_neurons_per_layer() const;
+    size_t num_layers() const;
 
     Eigen::Matrix<int, Eigen::Dynamic, 1> infer(
       const std::fs::path& input_path,
-      const int num_inputs,
-      const int batch_size,
-      const int num_buff
+      const size_t num_inputs,
+      const size_t batch_size,
+      const size_t num_buff
     ) const;
 
 };
@@ -82,8 +82,8 @@ template <typename T>
 GPUDecomp<T>::GPUDecomp(
   const std::fs::path& weight_path,
   const T bias,
-  const int num_neurons_per_layer,
-  const int num_layers
+  const size_t num_neurons_per_layer,
+  const size_t num_layers
 ):
   _bias{bias},
   _num_neurons_per_layer{num_neurons_per_layer},
@@ -97,7 +97,7 @@ GPUDecomp<T>::GPUDecomp(
   //only for double float
   cudaDeviceProp props;
   cudaGetDeviceProperties(&props, 0);
-  int max_num_per_block = props.sharedMemPerBlock / sizeof(T);
+  size_t max_num_per_block = props.sharedMemPerBlock / sizeof(T);
   if(num_neurons_per_layer <= max_num_per_block) {
     _COL_BLK = num_neurons_per_layer;
   }
@@ -170,28 +170,28 @@ GPUDecomp<T>::~GPUDecomp() {
 }
 
 template <typename T>
-int GPUDecomp<T>::num_neurons_per_layer() const {
+size_t GPUDecomp<T>::num_neurons_per_layer() const {
    return _num_neurons_per_layer; 
 }
 
 template <typename T>
-int GPUDecomp<T>::num_layers() const { 
+size_t GPUDecomp<T>::num_layers() const { 
   return _num_layers; 
 }
 
 template <typename T>
 Eigen::Matrix<int, Eigen::Dynamic, 1> GPUDecomp<T>::infer(
   const std::fs::path& input_path,
-  const int num_inputs,
-  const int batch_size,
-  const int num_buff
+  const size_t num_inputs,
+  const size_t batch_size,
+  const size_t num_buff
 ) const {
 
   std::cout << "Preprocessing.............................." << std::flush;
   auto pp_beg = std::chrono::steady_clock::now();
 
   int *d_W[num_buff];
-  for(int i = 0; i < num_buff; ++i) {
+  for(size_t i = 0; i < num_buff; ++i) {
     checkCuda(cudaMalloc(
       &d_W[i],
       _pp_wsize
@@ -201,9 +201,9 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUDecomp<T>::infer(
   T* Y[2];  
   bool* rowsY[2];
 
-  int batch_ylen = batch_size * _num_neurons_per_layer;
+  size_t batch_ylen = batch_size * _num_neurons_per_layer;
   size_t batch_ysize = batch_ylen * sizeof(T);
-  int ylen = num_inputs * _num_neurons_per_layer;
+  size_t ylen = num_inputs * _num_neurons_per_layer;
   size_t ysize = ylen * sizeof(T);
 
   checkCuda(cudaMalloc(&Y[0], batch_ysize));
@@ -273,16 +273,17 @@ void GPUDecomp<T>::_infer_flatterned_graph(
   T** Y,
   bool** rowsY,
   int** d_W,
-  const int num_inputs,
-  const int num_buff,
-  const int batch_size,
-  const int batch_ylen,
+  const size_t num_inputs,
+  const size_t num_buff,
+  const size_t batch_size,
+  const size_t batch_ylen,
   const size_t batch_ysize
 ) const {
 
   int device = -1;
   cudaGetDevice(&device);
   checkCuda(cudaMemPrefetchAsync(rowsY[0], sizeof(bool) * batch_size, device, NULL));
+  checkCuda(cudaMemPrefetchAsync(rowsY[1], sizeof(bool) * batch_size, device, NULL));
 
   dim3 threads(16, 16, 1);
   cudaStream_t stream_for_graph;
@@ -328,8 +329,8 @@ void GPUDecomp<T>::_infer_flatterned_graph(
   memset_params.width         = batch_ylen * (sizeof(T) / sizeof(float)); 
   memset_params.height        = 1;
 
-  for(int cur_layer = 0; cur_layer < _num_layers; cur_layer += num_buff) {
-    for(int k = 0; k < num_buff; ++k) {
+  for(size_t cur_layer = 0; cur_layer < _num_layers; cur_layer += num_buff) {
+    for(size_t k = 0; k < num_buff; ++k) {
 
       w_memcpy_params.srcPtr = make_cudaPitchedPtr(
                                 _h_pinned_weight + (k + cur_layer) * (_pp_wlen),
@@ -412,10 +413,15 @@ void GPUDecomp<T>::_infer_flatterned_graph(
   cudaGraphNode_t *nodes = NULL;
   size_t num_nodes = 0;
   checkCuda(cudaGraphGetNodes(graph, nodes, &num_nodes));
-  printf("\nNum of nodes in the graph created manually = %zu\n", num_nodes);
+  std::cout << "\nNum of nodes in the graph created manually = "
+            << num_nodes
+            << std::endl;
 
   checkCuda(cudaGraphGetEdges(graph, nodes, nodes, &num_edges));
-  printf("\nNum of nodes in the graph created manually = %zu\n", num_edges);
+  std::cout << "Num of edges in the graph created manually = " 
+            << num_edges
+            << std::endl;
+
 
   cudaGraphExec_t exec;
 
@@ -423,7 +429,7 @@ void GPUDecomp<T>::_infer_flatterned_graph(
 
   cudaStream_t stream_for_D2H_cpy;
   checkCuda(cudaStreamCreate(&stream_for_D2H_cpy));
-  for(int batch = 0; batch < num_inputs; batch += batch_size) {
+  for(size_t batch = 0; batch < num_inputs; batch += batch_size) {
     checkCuda(cudaMemcpy(
       Y[0],
       h_Y + batch * _num_neurons_per_layer,

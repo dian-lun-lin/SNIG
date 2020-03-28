@@ -14,14 +14,14 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> get_score(
 template<typename T>
 Eigen::Matrix<int, Eigen::Dynamic, 1> get_score(
   const CSRMatrix<T>& target,
-  const int rows
+  const size_t rows
 );
 
 template<typename T>
 Eigen::Matrix<int, Eigen::Dynamic, 1> get_score(
   const T* arr,
-  const int rows,
-  const int cols
+  const size_t rows,
+  const size_t cols
 );
 
 inline
@@ -54,11 +54,11 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> get_score(
 template<typename T>
 Eigen::Matrix<int, Eigen::Dynamic, 1> get_score(
   const CSRMatrix<T>& target,
-  const int rows
+  const size_t rows
 ) {
 
   Eigen::Matrix<int, Eigen::Dynamic, 1> score(rows, 1);
-  for(int i = 0; i < rows; ++i){
+  for(size_t i = 0; i < rows; ++i){
     int beg = target.row_array[i];
     int end = target.row_array[i + 1];
     T sum = std::accumulate(target.data_array + beg, target.data_array + end, 0);
@@ -83,12 +83,12 @@ bool is_passed(
 template<typename T>
 Eigen::Matrix<int, Eigen::Dynamic, 1> get_score(
   const T* arr,
-  const int rows,
-  const int cols
+  const size_t rows,
+  const size_t cols
 ) {
 
   Eigen::Matrix<int, Eigen::Dynamic, 1> score(rows, 1);
-  for(int i = 0; i < rows; ++i){
+  for(size_t i = 0; i < rows; ++i){
     T sum = std::accumulate(arr + i * cols, arr + (i+1) * cols, 0);
     score(i, 0) = sum > 0 ? 1 : 0;
   }

@@ -22,12 +22,12 @@ int main(int argc, char* argv[]) {
 
   CLI::App app{"Converter"};
 
-  int num_neurons_per_layer = 1024;
+  size_t num_neurons_per_layer = 1024;
   app.add_option("-n, --neurons", 
     num_neurons_per_layer, 
     "select number of neurons, default is 1024");
 
-  int num_layers = 120;
+  size_t num_layers = 120;
   app.add_option("-l, --layers", 
     num_layers, 
     "select number of layers, default is 120");
@@ -54,25 +54,27 @@ int main(int argc, char* argv[]) {
 
   CLI11_PARSE(app, argc, argv);
 
-  int COL_BLK;
-  int N_SLAB;
+  size_t COL_BLK;
+  size_t N_SLAB;
 
   cudaDeviceProp props;
   cudaGetDeviceProperties(&props, 0);
-  int max_num_per_block = props.sharedMemPerBlock / sizeof(float);
+  size_t max_num_per_block = props.sharedMemPerBlock / sizeof(float);
 
-  if(num_neurons_per_layer <= max_num_per_block){
+  if(num_neurons_per_layer <= max_num_per_block) {
     COL_BLK = num_neurons_per_layer;
   }
   else{
     int max_divisor = 2;
-    while((num_neurons_per_layer % max_divisor != 0) || (max_num_per_block < (num_neurons_per_layer / max_divisor))){
+    while((num_neurons_per_layer % max_divisor != 0) || (max_num_per_block < (num_neurons_per_layer / max_divisor))) {
       ++max_divisor;
     }
     COL_BLK = num_neurons_per_layer / max_divisor;
   }
 
   N_SLAB = num_neurons_per_layer / COL_BLK; 
+
+  std::cout << "Transforming weight files...\n";
 
   sparse_dnn::tsv_file_to_binary_file<float>(
     weight_path,
@@ -81,14 +83,18 @@ int main(int argc, char* argv[]) {
     num_neurons_per_layer,
     COL_BLK,
     N_SLAB,
-    10000
+    100000
   ); 
+
+  std::cout << "Transforming input files...\n";
 
   sparse_dnn::tsv_file_to_binary_file<float>(
     input_path,
     60000,
     num_neurons_per_layer
   );
+
+  std::cout << "Transforming golden files...\n";
 
   if(!golden_all){
     sparse_dnn::tsv_file_to_binary_file<float>(

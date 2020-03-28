@@ -1,24 +1,14 @@
 #include <CLI11/CLI11.hpp>
-#include <experimental/filesystem>
-
+#include <Eigen/Dense>
 #include <SparseDNN/SparseDNN.hpp>
 #include <SparseDNN/utility/reader.hpp>
 #include <SparseDNN/utility/scoring.hpp>
-#include <Eigen/Dense>
-
-namespace std {
-  namespace fs = experimental::filesystem;
-}
-
-
-//#include <thread>
 
 int main(int argc, char* argv[]) {
    
-
   // usage: ./main -m sequential 
-  //        ./main -m data_parallel
-  //        --is_GPU on
+  //        ./main -m CPU_parallel
+  
   CLI::App app{"SparseDNN"};
   std::string mode = "sequential";
   app.add_option("-m, --mode", 

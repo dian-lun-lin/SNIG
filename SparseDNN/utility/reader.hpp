@@ -33,125 +33,125 @@ to_numeric(const std::string& str) {
 template <typename T>
 Eigen::SparseMatrix<T> tsv_string_to_matrix(
   const std::string& s,
-  const int rows,
-  const int cols,
-  const int nnz
+  const size_t rows,
+  const size_t cols,
+  const size_t nnz
 );
 
 template <typename T>
 void tsv_string_to_CSR_matrix(
   const std::string& s,
-  const int rows,
-  const int cols,
-  const int nnz,
+  const size_t rows,
+  const size_t cols,
+  const size_t nnz,
   CSRMatrix<T>& mat
 );
 
 template <typename T>
 void tsv_string_to_CSC_matrix(
   const std::string& s,
-  const int rows,
-  const int cols,
-  const int nnz,
+  const size_t rows,
+  const size_t cols,
+  const size_t nnz,
   CSCMatrix<T>& mat
 );
 
 template <typename T>
 void tsv_string_to_1D_array(
   const std::string& s,
-  const int cols,
+  const size_t cols,
   T* arr
 );
 
 template <typename T>
 void tsv_string_to_CSR_packed_array(
   const std::string& s,
-  const int rows,
-  const int cols,
-  const int nnz,
-  const int COL_BLK,
-  const int N_SLAB,
+  const size_t rows,
+  const size_t cols,
+  const size_t nnz,
+  const size_t COL_BLK,
+  const size_t N_SLAB,
   int* arr
 );
 
 template <typename T>
 std::vector<Eigen::SparseMatrix<T> > read_weight(
   const std::fs::path& weight_dir,
-  const int num_neurons_per_layer,
-  const int num_layers
+  const size_t num_neurons_per_layer,
+  const size_t num_layers
 );
 
 template <typename T>
 void read_weight(
   const std::string& s,
-  const int num_neurons_per_layer,
-  const int nnz,
+  const size_t num_neurons_per_layer,
+  const size_t nnz,
   CSRMatrix<T>& mat
 );
 
 template <typename T>
 void read_weight(
   const std::fs::path& weight_dir,
-  const int num_neurons_per_layer,
-  const int max_nnz_per_layer,
-  const int num_layers,
-  const int COL_BLK,
-  const int N_SLAB,
-  const int pad,
+  const size_t num_neurons_per_layer,
+  const size_t max_nnz_per_layer,
+  const size_t num_layers,
+  const size_t COL_BLK,
+  const size_t N_SLAB,
+  const size_t pad,
   int* arr
 );
 
 template <typename T>
 void read_weight_binary(
   const std::fs::path& weight_dir,
-  const int num_neurons_per_layer,
-  const int max_nnz_per_layer,
-  const int num_layers,
-  const int N_SLAB,
-  const int pad,
+  const size_t num_neurons_per_layer,
+  const size_t max_nnz_per_layer,
+  const size_t num_layers,
+  const size_t N_SLAB,
+  const size_t pad,
   int* arr
 );
 
 template <typename T>
 Eigen::SparseMatrix<T> read_input(
   const std::fs::path& input_path,
-  const int num_inputs,
-  const int num_features
+  const size_t num_inputs,
+  const size_t num_features
 );
 
 template<typename T>
 void read_input(
   const std::fs::path& input_path,
-  const int num_inputs,
-  const int num_featrues,
+  const size_t num_inputs,
+  const size_t num_featrues,
   T* arr,
   int* rlenY,
   int* rowsY,
-  int& nerowsY
+  size_t& nerowsY
 );
 
 template<typename T>
 void read_input(
   const std::fs::path& input_path,
-  const int num_inputs,
-  const int num_features,
+  const size_t num_inputs,
+  const size_t num_features,
   T* arr
 );
 
 template <typename T>
 void read_input(
   const std::string& s,
-  const int num_inputs,
-  const int num_features,
-  const int nnz,
+  const size_t num_inputs,
+  const size_t num_features,
+  const size_t nnz,
   CSRMatrix<T>& mat
 );
 
 template <typename T>
 void read_input(
   const std::fs::path& input_path,
-  const int num_features,
-  const int batch_size,
+  const size_t num_features,
+  const size_t batch_size,
   T* arr
 );
 
@@ -161,20 +161,20 @@ void read_input_binary(
   T* arr,
   int* rlenY,
   int* rowsY,
-  int& nerowsY
+  size_t& nerowsY
 );
 
 template <typename T>
 void read_input_binary(
   const std::fs::path& input_path,
-  const int batch_size,
+  const size_t batch_size,
   T* arr
 );
 
 template <typename T>
 void read_input_binary(
   const std::fs::path& input_path,
-  const int batch_size,
+  const size_t batch_size,
   T* arr,
   bool* rowsY
 );
@@ -182,7 +182,7 @@ void read_input_binary(
 inline
 Eigen::Matrix<int, Eigen::Dynamic, 1> read_golden(
   const std::fs::path& golden_path,
-  const int num_inputs
+  const size_t num_inputs
 );
 
 inline
@@ -200,46 +200,46 @@ void write_file_from_string(
 );
     
 inline
-int find_max_nnz(
+size_t find_max_nnz(
   const std::fs::path& weight_dir,
-  const int num_layers,
-  const int num_neurons_per_layer
+  const size_t num_layers,
+  const size_t num_neurons_per_layer
 );
 
 inline
-int find_max_nnz_binary(
+size_t find_max_nnz_binary(
   const std::fs::path& weight_dir,
-  const int num_layers,
-  const int num_neurons_per_layer
+  const size_t num_layers,
+  const size_t num_neurons_per_layer
 );
 
 inline
-int count_nnz(const std::string& s);
+size_t count_nnz(const std::string& s);
 
 template <typename T>
 void tsv_file_to_binary_file(
   const std::fs::path& weight_dir,
-  const int num_layers,
-  const int rows,
-  const int cols,
-  const int COL_BLK,
-  const int N_SLAB,
-  const int estimate_nnz
+  const size_t num_layers,
+  const size_t rows,
+  const size_t cols,
+  const size_t COL_BLK,
+  const size_t N_SLAB,
+  const size_t estimate_nnz
 );
 
 template <typename T>
 void tsv_file_to_binary_file(
   std::fs::path file_path,
-  const int rows,
-  const int cols
+  const size_t rows,
+  const size_t cols
 );
 
 template <typename T>
 void tsv_file_to_binary_file(
   std::fs::path golden_path,
-  const int num_features,
-  const int num_layers,
-  const int rows
+  const size_t num_features,
+  const size_t num_layers,
+  const size_t rows
 );
 
 //-----------------------------------------------------------------------------
@@ -249,11 +249,11 @@ void tsv_file_to_binary_file(
 template <typename T>
 Eigen::SparseMatrix<T> tsv_string_to_matrix(
   const std::string& s,
-  const int rows,
-  const int cols,
-  const int nnz
+  const size_t rows,
+  const size_t cols,
+  const size_t nnz
 ) {
-  //T is the floating posize_t type, either float or double
+  //T is either float or double type
   static_assert(
     std::is_same<T, float>::value || std::is_same<T, double>::value,
     "data type must be either float or double"
@@ -289,12 +289,12 @@ Eigen::SparseMatrix<T> tsv_string_to_matrix(
 template <typename T>
 void tsv_string_to_CSR_matrix(
   const std::string& s,
-  const int rows,
-  const int cols,
-  const int nnz,
+  const size_t rows,
+  const size_t cols,
+  const size_t nnz,
   CSRMatrix<T>& mat
 ) {
-  //T is the floating posize_t type, either float or double
+  //T is either float or double type
   static_assert(
     std::is_same<T, float>::value || std::is_same<T, double>::value,
     "data type must be either float or double"
@@ -308,12 +308,12 @@ void tsv_string_to_CSR_matrix(
 template <typename T>
 void tsv_string_to_CSC_matrix(
   const std::string& s,
-  const int rows,
-  const int cols,
-  const int nnz,
+  const size_t rows,
+  const size_t cols,
+  const size_t nnz,
   CSCMatrix<T>& mat
 ) {
-  //T is the floating posize_t type, either float or double
+  //T is either float or double type
   static_assert(
     std::is_same<T, float>::value || std::is_same<T, double>::value,
     "data type must be either float or double"
@@ -326,10 +326,10 @@ void tsv_string_to_CSC_matrix(
 template <typename T>
 void tsv_string_to_1D_array(
   const std::string& s,
-  const int cols,
+  const size_t cols,
   T* arr
 ) {
-  //T is the floating posize_t type, either float or double
+  //T is either float or double type
   static_assert(
     std::is_same<T, float>::value || std::is_same<T, double>::value,
     "data type must be either float or double"
@@ -355,14 +355,14 @@ void tsv_string_to_1D_array(
 template <typename T>
 void tsv_string_to_CSR_packed_array(
   const std::string& s,
-  const int rows,
-  const int cols,
-  const int nnz,
-  const int COL_BLK,
-  const int N_SLAB,
+  const size_t rows,
+  const size_t cols,
+  const size_t nnz,
+  const size_t COL_BLK,
+  const size_t N_SLAB,
   int* arr
 ) {
-  //T is the floating posize_t type, either float or double
+  //T is either float or double type
   static_assert(
     std::is_same<T, float>::value || std::is_same<T, double>::value,
     "data type must be either float or double"
@@ -403,11 +403,10 @@ void tsv_string_to_CSR_packed_array(
 template <typename T>
 std::vector<Eigen::SparseMatrix<T> > read_weight(
   const std::fs::path& weight_dir,
-  const int num_neurons_per_layer,
-  const int num_layers
+  const size_t num_neurons_per_layer,
+  const size_t num_layers
 ) {
-
-  //T is the floating posize_t type, either float or double
+  //T is either float or double type
   static_assert(
     std::is_same<T, float>::value || std::is_same<T, double>::value,
     "data type must be either float or double"
@@ -437,8 +436,8 @@ std::vector<Eigen::SparseMatrix<T> > read_weight(
 template <typename T>
 void read_weight(
   const std::string& s,
-  const int num_neurons_per_layer,
-  const int nnz,
+  const size_t num_neurons_per_layer,
+  const size_t nnz,
   CSRMatrix<T>& mat
 ) {
   tsv_string_to_CSR_matrix<T>(s, num_neurons_per_layer, num_neurons_per_layer, nnz, mat);
@@ -447,21 +446,21 @@ void read_weight(
 template <typename T>
 void read_weight(
   const std::fs::path& weight_dir,
-  const int num_neurons_per_layer,
-  const int max_nnz_per_layer,
-  const int num_layers,
-  const int COL_BLK,
-  const int N_SLAB,
-  const int pad,
+  const size_t num_neurons_per_layer,
+  const size_t max_nnz_per_layer,
+  const size_t num_layers,
+  const size_t COL_BLK,
+  const size_t N_SLAB,
+  const size_t pad,
   int* arr
 ) {
-  //T is the floating posize_t type, either float or double
+  //T is either float or double type
   static_assert(
     std::is_same<T, float>::value || std::is_same<T, double>::value,
     "data type must be either float or double"
   );
 
-  for(int i = 0; i < num_layers; ++i) {
+  for(size_t i = 0; i < num_layers; ++i) {
     std::fs::path p = weight_dir;
     p /= "n" + std::to_string(num_neurons_per_layer) + "-l"
       + std::to_string(i + 1) + ".tsv";
@@ -484,32 +483,32 @@ void read_weight(
 template <typename T>
 void read_weight_binary(
   const std::fs::path& weight_dir,
-  const int num_neurons_per_layer,
-  const int max_nnz_per_layer,
-  const int num_layers,
-  const int N_SLAB,
-  const int pad,
+  const size_t num_neurons_per_layer,
+  const size_t max_nnz_per_layer,
+  const size_t num_layers,
+  const size_t N_SLAB,
+  const size_t pad,
   int* arr
 ) {
-  //T is the floating posize_t type, either float or double
+  //T is either float or double type
   static_assert(
     std::is_same<T, float>::value || std::is_same<T, double>::value,
     "data type must be either float or double"
   );
 
-  for(int i = 0; i < num_layers; ++i){
+  for(size_t i = 0; i < num_layers; ++i){
     std::fs::path p = weight_dir;
     p /= "n" + std::to_string(num_neurons_per_layer) + "-l"
       + std::to_string(i + 1) + ".b";
     std::ifstream in(p, std::ios::in | std::ios::binary);
 
-    int rows;
-    int nnz;
+    size_t rows;
+    size_t nnz;
     int* location = arr + i * (num_neurons_per_layer * N_SLAB + 1
       + max_nnz_per_layer + (sizeof(T) / sizeof(int)) * max_nnz_per_layer + pad);
 
-    in.read((char*)&rows, sizeof(int));
-    in.read((char*)&nnz, sizeof(int));
+    in.read((char*)&rows, sizeof(size_t));
+    in.read((char*)&nnz, sizeof(size_t));
     in.read((char*)location, sizeof(int) * (rows * N_SLAB + 1 + nnz) + sizeof(T) * nnz);
   }
 
@@ -518,11 +517,11 @@ void read_weight_binary(
 template<typename T>
 Eigen::SparseMatrix<T> read_input(
   const std::fs::path& input_path,
-  const int num_inputs,
-  const int num_features
+  const size_t num_inputs,
+  const size_t num_features
 ) {
 
-  //T is the floating posize_t type, either float or double
+  //T is either float or double type
   static_assert(
     std::is_same<T, float>::value || std::is_same<T, double>::value,
     "data type must be either float or double"
@@ -540,14 +539,14 @@ Eigen::SparseMatrix<T> read_input(
 template<typename T>
 void read_input(
   const std::fs::path& input_path,
-  const int num_inputs,
-  const int num_features,
+  const size_t num_inputs,
+  const size_t num_features,
   T* arr,
   int* rlenY,
   int* rowsY,
-  int& nerowsY
+  size_t& nerowsY
 ) {
-  //T is the floating posize_t type, either float or double
+  //T is either float or double type
   static_assert(
     std::is_same<T, float>::value || std::is_same<T, double>::value,
     "data type must be either float or double"
@@ -557,7 +556,7 @@ void read_input(
   tsv_string_to_1D_array<T>(input_str, num_features, arr);
 
   nerowsY = 0;
-  for(int i = 0; i < num_inputs; ++i) {
+  for(size_t i = 0; i < num_inputs; ++i) {
     rlenY[i] = std::count_if(
                  arr + i * num_features,
                  arr + (i + 1) * num_features,
@@ -570,11 +569,11 @@ void read_input(
 template<typename T>
 void read_input(
   const std::fs::path& input_path,
-  const int num_inputs,
-  const int num_features,
+  const size_t num_inputs,
+  const size_t num_features,
   T* arr
 ) {
-  //T is the floating posize_t type, either float or double
+  //T is either float or double type
   static_assert(
     std::is_same<T, float>::value || std::is_same<T, double>::value,
     "data type must be either float or double"
@@ -587,12 +586,12 @@ void read_input(
 template <typename T>
 void read_input(
   const std::string& s,
-  const int num_inputs,
-  const int num_features,
-  const int nnz,
+  const size_t num_inputs,
+  const size_t num_features,
+  const size_t nnz,
   CSRMatrix<T>& mat
 ) {
-  //T is the floating posize_t type, either float or double
+  //T is either float or double type
   static_assert(
     std::is_same<T, float>::value || std::is_same<T, double>::value,
     "data type must be either float or double"
@@ -608,9 +607,9 @@ void read_input_binary(
   T* arr,
   int* rlenY,
   int* rowsY,
-  int& nerowsY
+  size_t& nerowsY
 ) {
-  //T is the floating posize_t type, either float or double
+  //T is either float or double type
   static_assert(
     std::is_same<T, float>::value || std::is_same<T, double>::value,
     "data type must be either float or double"
@@ -618,14 +617,14 @@ void read_input_binary(
 
   std::fs::path p = input_path;
   std::ifstream in(p, std::ios::in | std::ios::binary);
-  int num_inputs;
-  int num_features;
-  in.read((char*)&num_inputs, sizeof(int));
-  in.read((char*)&num_features, sizeof(int));
+  size_t num_inputs;
+  size_t num_features;
+  in.read((char*)&num_inputs, sizeof(size_t));
+  in.read((char*)&num_features, sizeof(size_t));
   in.read((char*)arr, sizeof(T) * num_inputs * num_features);
 
   nerowsY = 0;
-  for(int i = 0; i < num_inputs; ++i) {
+  for(size_t i = 0; i < num_inputs; ++i) {
     rlenY[i] = std::count_if(
                  arr + i * num_features,
                  arr + (i + 1) * num_features,
@@ -637,10 +636,10 @@ void read_input_binary(
 template <typename T>
 void read_input_binary(
   const std::fs::path& input_path,
-  const int batch_size,
+  const size_t batch_size,
   T* arr
 ) {
-  //T is the floating posize_t type, either float or double
+  //T is either float or double type
   static_assert(
     std::is_same<T, float>::value || std::is_same<T, double>::value,
     "data type must be either float or double"
@@ -648,21 +647,21 @@ void read_input_binary(
 
   std::fs::path p = input_path;
   std::ifstream in(p, std::ios::in | std::ios::binary);
-  int num_inputs;
-  int num_features;
-  in.read((char*)&num_inputs, sizeof(int));
-  in.read((char*)&num_features, sizeof(int));
+  size_t num_inputs;
+  size_t num_features;
+  in.read((char*)&num_inputs, sizeof(size_t));
+  in.read((char*)&num_features, sizeof(size_t));
   in.read((char*)arr, sizeof(T) * num_inputs * num_features);
 }
 
 template <typename T>
 void read_input_binary(
   const std::fs::path& input_path,
-  const int batch_size,
+  const size_t batch_size,
   T* arr,
   bool* rowsY
 ) {
-  //T is the floating posize_t type, either float or double
+  //T is either float or double type
   static_assert(
     std::is_same<T, float>::value || std::is_same<T, double>::value,
     "data type must be either float or double"
@@ -670,13 +669,13 @@ void read_input_binary(
 
   std::fs::path p = input_path;
   std::ifstream in(p, std::ios::in | std::ios::binary);
-  int num_inputs;
-  int num_features;
-  in.read((char*)&num_inputs, sizeof(int));
-  in.read((char*)&num_features, sizeof(int));
+  size_t num_inputs;
+  size_t num_features;
+  in.read((char*)&num_inputs, sizeof(size_t));
+  in.read((char*)&num_features, sizeof(size_t));
   in.read((char*)arr, sizeof(T) * num_inputs * num_features);
 
-  for(int i = 0; i < batch_size; ++i) {
+  for(size_t i = 0; i < batch_size; ++i) {
     auto it  = std::find_if(
                  arr + i * num_features,
                  arr + (i + 1) * num_features,
@@ -689,7 +688,7 @@ void read_input_binary(
 inline
 Eigen::Matrix<int, Eigen::Dynamic, 1> read_golden(
   const std::fs::path& golden_path,
-  const int num_inputs
+  const size_t num_inputs
 ) {
   std::string line;
   std::istringstream read_s{read_file_to_string(golden_path)};
@@ -707,8 +706,8 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> read_golden_binary(
 ) {
   std::ifstream in(golden_path, std::ios::in | std::ios::binary);
 
-  int rows;
-  in.read((char*)&rows, sizeof(int));
+  size_t rows;
+  in.read((char*)&rows, sizeof(size_t));
 
   Eigen::Matrix<int, Eigen::Dynamic, 1> golden(rows, 1);
   in.read((char*)golden.data(), sizeof(Eigen::Matrix<int, Eigen::Dynamic, 1>::Scalar) * rows);
@@ -748,14 +747,14 @@ void write_file_from_string(
 }
 
 inline
-int find_max_nnz(
+size_t find_max_nnz(
   const std::fs::path& weight_dir,
-  const int num_layers,
-  const int num_neurons_per_layer
+  const size_t num_layers,
+  const size_t num_neurons_per_layer
 ) {
 
-  int max_nnz{0};
-  for(int i = 0; i < num_layers; ++i) {
+  size_t max_nnz{0};
+  for(size_t i = 0; i < num_layers; ++i) {
     std::fs::path p = weight_dir;
     p /= "n" + std::to_string(num_neurons_per_layer) + "-l"
       + std::to_string(i + 1) + ".tsv";
@@ -767,43 +766,43 @@ int find_max_nnz(
 }
 
 inline
-int find_max_nnz_binary(
+size_t find_max_nnz_binary(
   const std::fs::path& weight_dir,
-  const int num_layers,
-  const int num_neurons_per_layer
+  const size_t num_layers,
+  const size_t num_neurons_per_layer
 ) {
-  int max_nnz{0};
-  for(int i = 0; i < num_layers; ++i) {
+  size_t max_nnz{0};
+  for(size_t i = 0; i < num_layers; ++i) {
     std::fs::path p = weight_dir;
     p /= "n" + std::to_string(num_neurons_per_layer) + "-l"
       + std::to_string(i + 1) + ".b";
     std::ifstream in(p, std::ios::in | std::ios::binary);
 
-    int nnz;
-    int rows;
-    in.read((char*)&rows, sizeof(int));
-    in.read((char*)&nnz, sizeof(int));
+    size_t nnz;
+    size_t rows;
+    in.read((char*)&rows, sizeof(size_t));
+    in.read((char*)&nnz, sizeof(size_t));
     max_nnz = std::max(max_nnz, nnz);
   }
 
   return max_nnz;
 }
 inline
-int count_nnz(const std::string& s) {
+size_t count_nnz(const std::string& s) {
   return std::count(s.begin(), s.end(), '\n');
 }
 
 template <typename T>
 void tsv_file_to_binary_file(
   const std::fs::path& weight_dir,
-  const int num_layers,
-  const int rows,
-  const int cols,
-  const int COL_BLK,
-  const int N_SLAB,
-  const int estimate_nnz
+  const size_t num_layers,
+  const size_t rows,
+  const size_t cols,
+  const size_t COL_BLK,
+  const size_t N_SLAB,
+  const size_t estimate_nnz
 ) {
-  //T is the floating posize_t type, either float or double
+  //T is either float or double type
   static_assert(
     std::is_same<T, float>::value || std::is_same<T, double>::value,
     "data type must be either float or double"
@@ -812,7 +811,7 @@ void tsv_file_to_binary_file(
   std::vector<Triplet<T> > triplets;
   triplets.reserve(estimate_nnz);
 
-  for(int i = 0; i < num_layers; ++i) {
+  for(size_t i = 0; i < num_layers; ++i) {
     triplets.clear();
     std::fs::path p = weight_dir;
     p /= "n" + std::to_string(cols) + "-l"
@@ -838,7 +837,7 @@ void tsv_file_to_binary_file(
     }
 
     std::sort(triplets.begin(), triplets.end());
-    int nnz = triplets.size();
+    size_t nnz = triplets.size();
 
     int row_array[rows * N_SLAB + 1];
     int col_array[nnz];
@@ -846,7 +845,7 @@ void tsv_file_to_binary_file(
     
     std::memset(row_array, 0, sizeof(int) * (rows * N_SLAB + 1));
     
-    for(int j = 0 ; j < nnz; ++j) {
+    for(size_t j = 0 ; j < nnz; ++j) {
       ++row_array[triplets[j].row + 1];
       col_array[j] = triplets[j].col;
       data_array[j] = triplets[j].value;
@@ -859,8 +858,8 @@ void tsv_file_to_binary_file(
       + std::to_string(i + 1) + ".b";
 
     std::ofstream out(output_file, std::ios::out | std::ios::binary);
-    out.write((char*)&rows, sizeof(int));
-    out.write((char*)&nnz, sizeof(int));
+    out.write((char*)&rows, sizeof(size_t));
+    out.write((char*)&nnz, sizeof(size_t));
     out.write((char*)row_array, sizeof(int) * (rows * N_SLAB + 1));
     out.write((char*)col_array, sizeof(int) * (nnz));
     out.write((char*)data_array, sizeof(T) * (nnz));
@@ -872,10 +871,10 @@ void tsv_file_to_binary_file(
 template <typename T>
 void tsv_file_to_binary_file(
   std::fs::path input_path,
-  const int rows,
-  const int cols
+  const size_t rows,
+  const size_t cols
 ) {
-  //T is the floating posize_t type, either float or double
+  //T is either float or double type
   static_assert(
     std::is_same<T, float>::value || std::is_same<T, double>::value,
     "data type must be either float or double"
@@ -885,8 +884,6 @@ void tsv_file_to_binary_file(
   auto data_str = read_file_to_string(input_path);
 
   T data_array[rows * cols] = {0};
-  //auto data_array = std::make_unique<T[]>(rows * cols);
-  //std::memset(data_array, 0, sizeof(T) * rows * cols);
 
   std::istringstream read_s(data_str);
   std::vector<std::string> tokens;
@@ -906,19 +903,19 @@ void tsv_file_to_binary_file(
   p /= "sparse-images-" + std::to_string(cols) + ".b";
 
   std::ofstream out(p, std::ios::out | std::ios::binary);
-  out.write((char*)&rows, sizeof(int));
-  out.write((char*)&cols, sizeof(int));
+  out.write((char*)&rows, sizeof(size_t));
+  out.write((char*)&cols, sizeof(size_t));
   out.write((char*)data_array, sizeof(T) * (rows * cols));
 }
 
 template <typename T>
 void tsv_file_to_binary_file(
   std::fs::path golden_path,
-  const int num_features,
-  const int num_layers,
-  const int rows
+  const size_t num_features,
+  const size_t num_layers,
+  const size_t rows
 ) {
-  //T is the floating posize_t type, either float or double
+  //T is either float or double type
   static_assert(
     std::is_same<T, float>::value || std::is_same<T, double>::value,
     "data type must be either float or double"
@@ -939,7 +936,7 @@ void tsv_file_to_binary_file(
 
   std::ofstream out(p, std::ios::out | std::ios::binary);
 
-  out.write((char*)&rows, sizeof(int));
+  out.write((char*)&rows, sizeof(size_t));
   out.write(
     (char*) golden.data(),
     sizeof(Eigen::Matrix<int, Eigen::Dynamic, 1>::Scalar) * rows
