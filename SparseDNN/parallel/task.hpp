@@ -460,19 +460,25 @@ void wo_host_inference_test(
   T* Y1
 ) {
 
+
   if(rowsY0[blockIdx.x] == false) {
+    //memory reset here
+    //avoid call cudaMemset again
     rowsY1[blockIdx.x] = false;
     return;
   }
 
   extern  __shared__ T shRow[];
+  //use 2 byte bool array to avoid synchronization
+  //if is_nerow[1] = true, then rowsY1[bolckIdx.x] is true
+  //rowsY1[blockIdx.x] will then be caculated at next iteration.
   __shared__ bool is_nerow[2];
   is_nerow[1] = false;
-
   int tid = threadIdx.y * blockDim.x + threadIdx.x;
-  __syncthreads();
+
   for(size_t i = 0; i < N_SLAB; i++) {
     __syncthreads();
+    //use stride to reset shRow effectively
     for(size_t j = tid; j < COL_BLK; j += blockDim.x * blockDim.y) {
       shRow[j] = 0;  
     }
@@ -499,7 +505,7 @@ void wo_host_inference_test(
       }
     }
   }
-//only syc here
+  //only syc here
   __syncthreads();
   if(tid == 0) {
     rowsY1[blockIdx.x] = is_nerow[1];
