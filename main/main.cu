@@ -67,15 +67,15 @@ int main(int argc, char* argv[]) {
   Eigen::Matrix<int, Eigen::Dynamic, 1> result;
 
   //binary format is not completed yet.
-  //if(mode == "GPU_cusparse") {
-    //sparse_dnn::GPUCusparse<float> GPU_cusparse(
-      //weight_path, 
-      //bias,
-      //num_neurons_per_layer, 
-      //num_layers
-    //);
-    //result = GPU_cusparse.infer(input_path, 60000);
-  //}
+  if(mode == "GPU_cusparse") {
+    sparse_dnn::GPUCusparse<float> GPU_cusparse(
+      weight_path, 
+      bias,
+      num_neurons_per_layer, 
+      num_layers
+    );
+    result = GPU_cusparse.infer(input_path, 60000);
+  }
   if(mode == "GPU_baseline") {
     sparse_dnn::GPUBaseline<float> GPU_baseline(
       weight_path, 
@@ -101,7 +101,16 @@ int main(int argc, char* argv[]) {
       num_neurons_per_layer, 
       num_layers
     );
-    result = GPU_decompose.infer(input_path, 60000, 5000, 10);
+    result = GPU_decompose.infer(input_path, 60000, 5000, 2);
+  }
+  else if(mode == "GPU_taskflow") {
+    sparse_dnn::GPUTaskflow<float> GPU_taskflow(
+      weight_path, 
+      bias,
+      num_neurons_per_layer, 
+      num_layers
+    );
+    result = GPU_taskflow.infer(input_path, 60000, 5000, 10);
   }
   auto golden = sparse_dnn::read_golden_binary(golden_path);
   if(sparse_dnn::is_passed(result, golden)) {

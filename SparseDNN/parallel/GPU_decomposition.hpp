@@ -132,7 +132,7 @@ GPUDecomp<T>::GPUDecomp(
   _pp_w_index_len = _p_w_index_len + _pad;
 
   //pad packed weight length
-  _pp_wlen = _pp_w_index_len + (sizeof(T) / sizeof(float)) * _max_nnz_per_layer;
+  _pp_wlen = _pp_w_index_len + (sizeof(T) / sizeof(int)) * _max_nnz_per_layer;
   //pad packed weight size
   _pp_wsize = sizeof(int) * (_pp_w_index_len) + sizeof(T) * _max_nnz_per_layer;
 
@@ -190,6 +190,7 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUDecomp<T>::infer(
   std::cout << "Preprocessing.............................." << std::flush;
   auto pp_beg = std::chrono::steady_clock::now();
 
+  //weight allocation
   int *d_W[num_buff];
   for(size_t i = 0; i < num_buff; ++i) {
     checkCuda(cudaMalloc(
@@ -198,13 +199,20 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUDecomp<T>::infer(
     ));
   }
 
-  T* Y[2];  
-  bool* rowsY[2];
-
   size_t batch_ylen = batch_size * _num_neurons_per_layer;
   size_t batch_ysize = batch_ylen * sizeof(T);
   size_t ylen = num_inputs * _num_neurons_per_layer;
   size_t ysize = ylen * sizeof(T);
+
+  //input allocation
+  T* h_Y;
+  checkCuda(cudaMallocHost(
+    (void**)&h_Y,
+    ysize
+  ));
+
+  T* Y[2];  
+  bool* rowsY[2];
 
   checkCuda(cudaMalloc(&Y[0], batch_ysize));
   checkCuda(cudaMalloc(&Y[1], batch_ysize));
@@ -214,17 +222,6 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUDecomp<T>::infer(
   checkCuda(cudaMemset(Y[1], 0, batch_ysize));
   checkCuda(cudaMemset(rowsY[0], 1, sizeof(bool) * batch_size));
   checkCuda(cudaMemset(rowsY[1], 0, sizeof(bool) * batch_size));
-  checkCuda(cudaDeviceSynchronize());
-
-  T* h_Y;
-  //bool* h_rowsY; 
-  checkCuda(cudaMallocHost(
-    (void**)&h_Y,
-    ysize
-  ));
-
-//issue: should I sync here?
-  checkCuda(cudaDeviceSynchronize());
 
   read_input_binary<T>(input_path, batch_size, h_Y);
 
@@ -257,12 +254,15 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUDecomp<T>::infer(
             << "ms"
             << std::endl;
 
+  checkCuda(cudaFreeHost(h_Y));
   checkCuda(cudaFree(Y[0]));
   checkCuda(cudaFree(Y[1]));
   checkCuda(cudaFree(rowsY[0]));
   checkCuda(cudaFree(rowsY[1]));
-  checkCuda(cudaFree(d_W[0]));
-  checkCuda(cudaFree(d_W[1]));
+
+  for(size_t k =0; k < num_buff; ++k) {
+    checkCuda(cudaFree(d_W[k]));
+  }
 
   return score;
 }
@@ -441,7 +441,7 @@ void GPUDecomp<T>::_infer_flatterned_graph(
     checkCuda(cudaStreamSynchronize(stream_for_graph));
     checkCuda(cudaMemcpy(
       h_Y + batch * _num_neurons_per_layer,
-      Y[0],
+      Y[num_buff % 2],
       batch_ysize,
       cudaMemcpyDeviceToHost
       )

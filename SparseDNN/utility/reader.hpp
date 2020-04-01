@@ -496,7 +496,7 @@ void read_weight_binary(
     "data type must be either float or double"
   );
 
-  for(size_t i = 0; i < num_layers; ++i){
+  for(size_t i = 0; i < num_layers; ++i) {
     std::fs::path p = weight_dir;
     p /= "n" + std::to_string(num_neurons_per_layer) + "-l"
       + std::to_string(i + 1) + ".b";

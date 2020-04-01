@@ -5,6 +5,7 @@
 #include <SparseDNN/utility/matrix_operation.hpp>
 #include <SparseDNN/utility/scoring.hpp>
 #include <SparseDNN/parallel/task.hpp>
+#include <chrono>
 
 namespace std{
   namespace fs = experimental::filesystem;
@@ -125,6 +126,8 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUCusparse<T>::infer(
   std::cout << "Done\n";
 
   std::cout << "Start inference............................" << std::flush;
+  auto exec_beg = std::chrono::steady_clock::now();
+
   CSRMatrix<T> d_y;
   cudaMalloc(&d_y.row_array, sizeof(int) * (num_inputs + 1));
 
@@ -174,6 +177,12 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUCusparse<T>::infer(
     cudaFree(d_w.col_array);
     cudaFree(d_w.data_array);
   }
+
+  auto exec_end = std::chrono::steady_clock::now();
+  std::cout << "finished execution with "
+            << std::chrono::duration_cast<std::chrono::milliseconds>(exec_end - exec_beg).count()
+            << "ms"
+            << std::endl;
   
 
   cudaFree(d_z.row_array);
@@ -181,7 +190,16 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUCusparse<T>::infer(
   cudaFree(d_w.row_array);
 
 
+  std::cout << "Start scoring..............................." << std::flush;
+  auto score_beg = std::chrono::steady_clock::now();
+
   auto score = get_score(y, num_inputs);
+
+  auto score_end = std::chrono::steady_clock::now();
+  std::cout << "finished scoring with "
+            << std::chrono::duration_cast<std::chrono::milliseconds>(score_end - score_beg).count()
+            << "ms"
+            << std::endl;
 
   delete [] y.row_array;
   delete [] y.col_array;

@@ -20,11 +20,10 @@ get_bias() {
 
 get_command() {
   get_bias $2
-  if [[ "$1" == "GPU_cusparse" || "$1" == "GPU_baseline" || "$1" == "GPU_cugraph" ]]; then
-       ./main_cuda -m $1 -w ../dataset/weight/neuron$2/ --num_neurons_per_layer $2 --num_layers $3 --input ../dataset/MNIST/sparse-images-$2.b --golden ../dataset/MNIST/neuron$2-l$3-categories.b --bias $bias
-
-  else
+  if [[ "$1" == "CPU_parallel" || "$1" == "sequential" ]]; then
        ./main -m $1 -w ../dataset/weight/neuron$2/ --num_neurons_per_layer $2 --num_layers $3 --input ../dataset/MNIST/sparse-images-$2.b --golden ../dataset/MNIST/neuron$2-l$3-categories.b --bias $bias
+  else
+       ./main_cuda -m $1 -w ../dataset/weight/neuron$2/ --num_neurons_per_layer $2 --num_layers $3 --input ../dataset/MNIST/sparse-images-$2.b --golden ../dataset/MNIST/neuron$2-l$3-categories.b --bias $bias
 
   fi
 }
