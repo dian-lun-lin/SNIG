@@ -3,6 +3,7 @@
 #include "parallel/GPU_baseline.hpp"
 #include "parallel/GPU_cugraph.hpp"
 #include "parallel/GPU_decomposition.hpp"
+#include "parallel/GPU_taskflow.hpp"
 //#include "parallel/GPU_cugraph_test.hpp"
 
 
