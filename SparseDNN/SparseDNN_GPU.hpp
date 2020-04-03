@@ -4,6 +4,7 @@
 #include "parallel/GPU_cugraph.hpp"
 #include "parallel/GPU_decomposition.hpp"
 #include "parallel/GPU_taskflow.hpp"
+#include "parallel/GPU_decomposition_multiple.hpp"
 //#include "parallel/GPU_cugraph_test.hpp"
 
 

@@ -101,7 +101,7 @@ int main(int argc, char* argv[]) {
       num_neurons_per_layer, 
       num_layers
     );
-    result = GPU_decompose.infer(input_path, 60000, 5000, 2);
+    result = GPU_decompose.infer(input_path, 60000, 5000, 10);
   }
   else if(mode == "GPU_taskflow") {
     sparse_dnn::GPUTaskflow<float> GPU_taskflow(
@@ -111,6 +111,15 @@ int main(int argc, char* argv[]) {
       num_layers
     );
     result = GPU_taskflow.infer(input_path, 60000, 5000, 10);
+  }
+  else if(mode == "GPU_decompose_multiple") {
+    sparse_dnn::GPUDecompMulti<float> GPU_decomp_multi(
+      weight_path, 
+      bias,
+      num_neurons_per_layer, 
+      num_layers
+    );
+    result = GPU_decomp_multi.infer(input_path, 60000, 5000, 10, 1);
   }
   auto golden = sparse_dnn::read_golden_binary(golden_path);
   if(sparse_dnn::is_passed(result, golden)) {
