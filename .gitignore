@@ -2,4 +2,4 @@
 bin/
 build/
 dataset/
-.gitignore
+*.b
