@@ -29,7 +29,7 @@ class GPUBaseline {
 
     size_t _max_nnz_per_layer;
     size_t _COL_BLK;
-    size_t _pad;
+    size_t _pad {0};
     size_t _N_SLAB;
 
     size_t _p_w_index_len;

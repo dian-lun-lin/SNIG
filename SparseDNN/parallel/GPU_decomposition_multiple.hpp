@@ -33,7 +33,7 @@ class GPUDecompMulti {
 
     size_t _max_nnz_per_layer;
     size_t _COL_BLK;
-    size_t _pad;
+    size_t _pad {0};
     size_t _N_SLAB;
 
     size_t _p_w_index_len;
@@ -160,7 +160,7 @@ GPUDecompMulti<T>::GPUDecompMulti(
   _pp_wlen = _pp_w_index_len + (sizeof(T) / sizeof(int)) * _max_nnz_per_layer;
   //pad packed weight size
   _pp_wsize = sizeof(int) * (_pp_w_index_len) + sizeof(T) * _max_nnz_per_layer;
-
+  
   checkCuda(cudaMallocHost(
     (void**)&_h_pinned_weight,
     _pp_wsize * num_layers
@@ -340,7 +340,7 @@ void GPUDecompMulti<T>::_infer_flatterned_graph(
   //create graph to each GPU
   for(size_t dev = 0; dev < num_dev; ++dev) {
     checkCuda(cudaSetDevice(dev));
-    graphs.emplace_back(std::move(_flatterned_graph_manual(
+    graphs.emplace_back(_flatterned_graph_manual(
       h_Y,
       dev_Y[dev],
       dev_rowsY[dev],
@@ -350,7 +350,7 @@ void GPUDecompMulti<T>::_infer_flatterned_graph(
       batch_size,
       batch_ylen,
       batch_ysize
-    )));
+    ));
   }
 
   //initialize graph to each GPU

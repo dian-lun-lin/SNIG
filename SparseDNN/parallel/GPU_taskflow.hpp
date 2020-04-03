@@ -32,7 +32,7 @@ class GPUTaskflow {
 
     size_t _max_nnz_per_layer;
     size_t _COL_BLK;
-    size_t _pad;
+    size_t _pad {0};
     size_t _N_SLAB;
 
     size_t _p_w_index_len;
@@ -360,7 +360,7 @@ void GPUTaskflow<T>:: _infer_cudaflow(
 
     checkCuda(cudaMemcpy(
       h_Y + batch * _num_neurons_per_layer,
-      Y[num_buff % 2],
+      Y[0],
       batch_ysize,
       cudaMemcpyDeviceToHost
     ));

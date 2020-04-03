@@ -31,7 +31,7 @@ class GPUDecomp {
 
     size_t _max_nnz_per_layer;
     size_t _COL_BLK;
-    size_t _pad;
+    size_t _pad {0};
     size_t _N_SLAB;
 
     size_t _p_w_index_len;
@@ -427,8 +427,8 @@ void GPUDecomp<T>::_infer_flatterned_graph(
 
   checkCuda(cudaGraphInstantiate(&exec, graph, NULL, NULL, 0));
 
-  cudaStream_t stream_for_D2H_cpy;
-  checkCuda(cudaStreamCreate(&stream_for_D2H_cpy));
+  //cudaStream_t stream_for_D2H_cpy;
+  //checkCuda(cudaStreamCreate(&stream_for_D2H_cpy));
   for(size_t batch = 0; batch < num_inputs; batch += batch_size) {
     checkCuda(cudaMemcpy(
       Y[0],
@@ -441,7 +441,7 @@ void GPUDecomp<T>::_infer_flatterned_graph(
     checkCuda(cudaStreamSynchronize(stream_for_graph));
     checkCuda(cudaMemcpy(
       h_Y + batch * _num_neurons_per_layer,
-      Y[num_buff % 2],
+      Y[0],
       batch_ysize,
       cudaMemcpyDeviceToHost
       )

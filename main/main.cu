@@ -1,4 +1,3 @@
-#pragma once
 #include <CLI11/CLI11.hpp>
 #include <SparseDNN/SparseDNN_GPU.hpp>
 #include <SparseDNN/utility/reader.hpp>
