@@ -359,8 +359,10 @@ void GPUDecompMulti<T>::_infer_flatterned_graph(
     checkCuda(cudaStreamCreate(&stream_for_graphs[dev]));
     checkCuda(cudaGraphInstantiate(&executors[dev], graphs[dev], NULL, NULL, 0));
   }
+  checkCuda(cudaSetDevice(0));
 
   //launch graph on each GPU
+  //each thread manage one GPU
   std::atomic<size_t> end_of_inputs{0};
   std::vector<std::thread> thread_for_graphs;
   thread_for_graphs.reserve(num_dev);
@@ -368,7 +370,7 @@ void GPUDecompMulti<T>::_infer_flatterned_graph(
     thread_for_graphs.emplace_back([&, dev](){
       checkCuda(cudaSetDevice(dev));
       size_t get_inputs = end_of_inputs.fetch_add(batch_size);
-      while(get_inputs != num_inputs) {
+      while(get_inputs < num_inputs) {
         _graph_launch(
           batch_ysize,
           executors[dev],
@@ -559,6 +561,5 @@ void GPUDecompMulti<T>::_graph_launch(
     )
   );
 }
-
 
 }// end of namespace sparse_dnn ----------------------------------------------
