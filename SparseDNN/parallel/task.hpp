@@ -345,23 +345,36 @@ void baseline_inference(
     rlenY0[rid] = 0;
     rlenY1[rid] = 0;
   }
+  size_t nn_per_thread = num_neurons_per_layer / (blockDim.x * blockDim.y);
+  size_t cur_loc;
+  size_t row_loc;
+  T valY;
+
+  T local_Y[16];
+  for(size_t k = 0; k < nn_per_thread; ++k) {
+    local_Y[k] = Y0[rid * num_neurons_per_layer + tid + k * blockDim.x * blockDim.y];
+  }
   for(size_t i = 0; i < N_SLAB; i++) {
     __syncthreads();
     for(size_t j = threadIdx.x; j < COL_BLK; j++) {
       shRow[j] = 0;  
     }
     __syncthreads();
-    for(size_t j = threadIdx.y; j < num_neurons_per_layer; j += blockDim.y) {
-      T valY = Y0[rid * num_neurons_per_layer + j];
-      if(valY == 0) {
-        continue;
-      }
-      int begOffW = roffW[i * num_neurons_per_layer + j] + threadIdx.x;
-      int endOffW = roffW[i * num_neurons_per_layer + j + 1];
-      for(int k = begOffW; k < endOffW; k += blockDim.x) {
-        int colW = colsW[k];
-        T valW = valsW[k];
-        atomicAdd(&shRow[colW - i * COL_BLK], valY * valW);
+    for(size_t cur_v = 0; cur_v < nn_per_thread; ++cur_v) {
+      for(size_t t = 0; t < blockDim.x; ++t) {
+        valY = __shfl_sync(0xffffffff, local_Y[cur_v], t, blockDim.x);
+        if(valY == 0) {
+          continue;
+        }
+        cur_loc = __shfl_sync(0xffffffff, tid, t, blockDim.x);
+        row_loc = cur_loc + cur_v * blockDim.x * blockDim.y;
+        int begOffW = roffW[i * num_neurons_per_layer + row_loc] + threadIdx.x;
+        int endOffW = roffW[i * num_neurons_per_layer + row_loc + 1];
+        for(int k = begOffW; k < endOffW; k += blockDim.x) {
+          int colW = colsW[k];
+          T valW = valsW[k];
+          atomicAdd(&shRow[colW - i * COL_BLK], valY * valW);
+        }
       }
     }
     __syncthreads();
@@ -377,7 +390,6 @@ void baseline_inference(
       rlenY1[rid] += count;
     }
   }
-
 }
 
 template <typename T>
