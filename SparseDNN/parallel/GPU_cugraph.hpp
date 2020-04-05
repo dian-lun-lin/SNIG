@@ -284,7 +284,7 @@ void GPUCugraph<T>::_infer_unflatterned_graph(
   int** d_W,
   const size_t num_inputs
 ) const {
-  dim3 threads(32, 32, 1);
+  dim3 threads(2, 512, 1);
   cudaStream_t stream_for_graph;
   cudaGraph_t graph;
   std::vector<cudaGraphNode_t> cpy_dependencies;
@@ -453,7 +453,7 @@ void GPUCugraph<T>::_infer_flatterned_graph(
   int** d_W,
   const size_t num_inputs
 ) const {
-  dim3 threads(32, 32, 1);
+  dim3 threads(2, 512, 1);
   cudaStream_t stream_for_graph;
   cudaGraph_t graph;
   std::vector<cudaGraphNode_t> cpy_dependencies;

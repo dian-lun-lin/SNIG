@@ -323,7 +323,7 @@ void GPUTaskflowMulti<T>:: _infer_taskflow(
   std::vector<T*> beg_inputs(num_dev);
 
   dim3 grid_dim(batch_size, 1, 1);
-  dim3 block_dim(16, 16, 1);
+  dim3 block_dim(2, 512, 1);
 
   tf::Task start = taskflow.emplace([](){}).name("start");
 

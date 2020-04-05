@@ -227,6 +227,17 @@ const std::fs::path& input_path,
             << std::chrono::duration_cast<std::chrono::milliseconds>(pp_end - pp_beg).count()
             << "ms"
             << std::endl;
+  int dim_y{0};
+  if(_num_neurons_per_layer == 1024) {
+    dim_y = 16;
+  }
+  else if(_num_neurons_per_layer == 4096) {
+    dim_y = 32;
+  }
+  else if(_num_neurons_per_layer == 16384) {
+    dim_y = 64;
+  }
+  dim3 threads(4, dim_y, 1);
 
   std::cout << "Start inference............................" << std::flush;
 
@@ -237,7 +248,6 @@ const std::fs::path& input_path,
   checkCuda(cudaStreamCreate(&stream[0]));
   checkCuda(cudaStreamCreate(&stream[1]));
 
-  dim3 threads_dim(32, 32, 1);
 
   for(size_t cur_layer = 0; cur_layer < _num_layers - 1; ++cur_layer) {
     
@@ -249,7 +259,7 @@ const std::fs::path& input_path,
       stream[0]
     ));
 
-    baseline_inference<T><<<nerowsY, threads_dim, sizeof(T) * _COL_BLK, stream[1]>>>(
+    baseline_inference<T><<<nerowsY, threads, sizeof(T) * _COL_BLK, stream[1]>>>(
       Y[cur_layer % 2],
       nerowsY,
       rowsY[cur_layer % 2],
@@ -283,7 +293,7 @@ const std::fs::path& input_path,
     );
   }
 
-  baseline_inference<T><<<nerowsY, threads_dim, sizeof(T) * _COL_BLK, stream[1]>>>(
+  baseline_inference<T><<<nerowsY, threads, sizeof(T) * _COL_BLK, stream[1]>>>(
     Y[(_num_layers - 1) % 2],
     nerowsY,
     rowsY[(_num_layers - 1) % 2],

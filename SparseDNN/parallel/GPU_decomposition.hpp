@@ -285,7 +285,7 @@ void GPUDecomp<T>::_infer_flatterned_graph(
   checkCuda(cudaMemPrefetchAsync(rowsY[0], sizeof(bool) * batch_size, device, NULL));
   checkCuda(cudaMemPrefetchAsync(rowsY[1], sizeof(bool) * batch_size, device, NULL));
 
-  dim3 threads(16, 16, 1);
+  dim3 threads(2, 512, 1);
   cudaStream_t stream_for_graph;
   cudaGraph_t graph;
 

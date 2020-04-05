@@ -412,7 +412,7 @@ cudaGraph_t GPUDecompMulti<T>::_flatterned_graph_manual(
   const size_t batch_ysize
 ) const {
 
-  dim3 threads(16, 16, 1);
+  dim3 threads(2, 512, 1);
   cudaGraph_t graph;
 
   std::vector<std::vector<cudaGraphNode_t> >infer_dependencies(num_buff);

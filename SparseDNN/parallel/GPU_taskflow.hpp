@@ -290,7 +290,7 @@ void GPUTaskflow<T>:: _infer_cudaflow(
   tf::Taskflow taskflow("SparseDNN");
   tf::Executor executor;
   dim3 grid_dim(batch_size, 1, 1);
-  dim3 block_dim(16, 16, 1);
+  dim3 block_dim(2, 512, 1);
 
   auto cudaflow = taskflow.emplace([&](tf::cudaFlow& cf){
     std::vector<tf::cudaTask> weight_copies;
