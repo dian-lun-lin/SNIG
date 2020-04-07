@@ -212,7 +212,6 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUDecompMulti<T>::infer(
   const size_t num_buff,
   const size_t num_dev
 ) const {
-
   std::cout << "Preprocessing.............................." << std::flush;
   auto pp_beg = std::chrono::steady_clock::now();
 
@@ -331,7 +330,6 @@ void GPUDecompMulti<T>::_infer_flatterned_graph(
   const size_t batch_ylen,
   const size_t batch_ysize
 ) const {
-
   std::vector<cudaStream_t> stream_for_graphs(num_dev);
   std::vector<cudaGraphExec_t> executors(num_dev);
   std::vector<cudaGraph_t> graphs;
@@ -383,10 +381,10 @@ void GPUDecompMulti<T>::_infer_flatterned_graph(
       }
     });
   }
+
   for(auto& each_thread : thread_for_graphs) {
     each_thread.join();
   }
-
   for(auto& graph : graphs) {
     checkCuda(cudaGraphDestroy(graph));
   }
@@ -396,7 +394,6 @@ void GPUDecompMulti<T>::_infer_flatterned_graph(
   for(auto& stream_for_graph : stream_for_graphs) {
     checkCuda(cudaStreamDestroy(stream_for_graph));
   }
-  return;
 }
 
 template <typename T>
@@ -411,7 +408,6 @@ cudaGraph_t GPUDecompMulti<T>::_flatterned_graph_manual(
   const size_t batch_ylen,
   const size_t batch_ysize
 ) const {
-
   dim3 threads(2, 512, 1);
   cudaGraph_t graph;
 
@@ -436,7 +432,7 @@ cudaGraph_t GPUDecompMulti<T>::_flatterned_graph_manual(
                                   _pp_wsize,
                                   1,
                                   1
-                                );
+                                  );
   w_memcpy_params.kind          = cudaMemcpyHostToDevice;
 
   //infer
@@ -450,12 +446,13 @@ cudaGraph_t GPUDecompMulti<T>::_flatterned_graph_manual(
   memset_params.value         = 0;
   memset_params.pitch         = 0;
   memset_params.elementSize   = sizeof(float); // elementSize can be max 4 bytes
-  memset_params.width         = batch_ylen * (sizeof(T) / sizeof(float)); 
+  //memset_params.width         = batch_ylen * (sizeof(T) / sizeof(float)); 
+  memset_params.width = 
+    batch_ylen * (sizeof(T) / sizeof(float)); 
   memset_params.height        = 1;
 
   for(size_t cur_layer = 0; cur_layer < _num_layers; cur_layer += num_buff) {
     for(size_t k = 0; k < num_buff; ++k) {
-
       w_memcpy_params.srcPtr = make_cudaPitchedPtr(
                                 _h_pinned_weight + (k + cur_layer) * (_pp_wlen),
                                 _pp_wsize,
@@ -533,7 +530,6 @@ cudaGraph_t GPUDecompMulti<T>::_flatterned_graph_manual(
     infer_dependencies[0].push_back(memset_nodes[num_buff - 1]);
   }
   return graph;
-
 }
 
 template <typename T>

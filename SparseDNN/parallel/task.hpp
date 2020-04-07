@@ -9,14 +9,6 @@
 
 namespace sparse_dnn{
 
-//struct HostNerowArgs{
-  //int num_inputs;
-  //int update_layer;
-  //int** rlenY;
-  //int** rowsY;
-  //int* nerowsY;
-//};
-
 inline
 void cusparse_mutiplication(
   const CSRMatrix<float>& a,
@@ -553,7 +545,6 @@ void wo_host_inference_test(
   T* Y1
 ) {
 
-  int tid = threadIdx.y * blockDim.x + threadIdx.x;
   if(rowsY0[blockIdx.x] == false) {
     //memory reset here
     //avoid calling cudaMemset
@@ -562,6 +553,7 @@ void wo_host_inference_test(
   }
 
   extern  __shared__ T shRow[];
+  int tid = threadIdx.y * blockDim.x + threadIdx.x;
   //use 2 byte bool array to avoid synchronization
   //if is_nerow[1] = true, then rowsY1[bolckIdx.x] is true
   //rowsY1[blockIdx.x] will then be caculated at next iteration.
@@ -593,6 +585,7 @@ void wo_host_inference_test(
       T v = j + tid < COL_BLK ? shRow[j + tid] + bias : -1;
       if(j + tid < COL_BLK) {
         Y1[blockIdx.x * num_neurons_per_layer + i * COL_BLK + j + tid] = min(T(32), max(T(0), v));
+        is_nerow[v > 0] = true;
       }
     }
   }
@@ -622,9 +615,11 @@ void wo_host_inference_test_2(
   if(rowsY0[blockIdx.x] == false) {
     //memory reset here
     //avoid calling cudaMemset
-    rowsY1[blockIdx.x] = false;
-    for(size_t j = tid; j < num_neurons_per_layer; j += blockDim.x * blockDim.y) {
-      Y1[blockIdx.x * num_neurons_per_layer + j] = 0;
+    if(rowsY1[blockIdx.x]) {
+      for(size_t j = tid; j < num_neurons_per_layer; j += blockDim.x * blockDim.y) {
+        Y1[blockIdx.x * num_neurons_per_layer + j] = 0;
+      }
+      rowsY1[blockIdx.x] = false;
     }
     return;
   }

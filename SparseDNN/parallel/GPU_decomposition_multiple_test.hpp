@@ -68,11 +68,8 @@ class GPUDecompMulti {
     ) const;
 
     void _graph_launch(
-      const int dev_id,
-      const size_t batch_ysize,
       const cudaGraphExec_t& exec,
-      const cudaStream_t& stream_for_graph,
-      T* beg_Y
+      const cudaStream_t& stream_for_graph
     ) const;
 
     void _set_graph_param(
@@ -222,7 +219,6 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUDecompMulti<T>::infer(
   const size_t num_buff,
   const size_t num_dev
 ) const {
-
   std::cout << "Preprocessing.............................." << std::flush;
   auto pp_beg = std::chrono::steady_clock::now();
 
@@ -336,14 +332,12 @@ void GPUDecompMulti<T>::_infer_flatterned_graph(
   const size_t batch_ylen,
   const size_t batch_ysize
 ) const {
-
   std::vector<cudaStream_t> stream_for_graphs(num_dev);
   std::vector<cudaGraphExec_t> executors(num_dev);
   std::vector<cudaGraph_t> graphs;
   graphs.reserve(num_dev);
   //nodes that change their params each iteration
   std::vector<std::vector<cudaGraphNode_t> > dev_infer_nodes;
-  //std::vector<std::vector<cudaGraphMemset_t> > dev_memset_nodes;
   std::vector<cudaKernelNodeParams> dev_infer_params;
   dev_infer_nodes.reserve(num_dev);
   dev_infer_params.reserve(num_dev);
@@ -391,18 +385,6 @@ void GPUDecompMulti<T>::_infer_flatterned_graph(
       while(beg_inputs < num_inputs) {
         dev_Y[dev][0] = source_Y + beg_inputs * _num_neurons_per_layer;
         dev_rowsY[dev][0] = source_rowsY + beg_inputs;
-        //checkCuda(cudaMemAdvise(
-          //dev_Y[dev][0],
-          //batch_ysize,
-          //cudaMemAdviseSetPreferredLocation,
-          //dev
-        //));
-        //checkCuda(cudaMemAdvise(
-          //dev_rowsY[dev][0],
-          //sizeof(bool) * batch_size,
-          //cudaMemAdviseSetPreferredLocation,
-          //dev
-        //));
         checkCuda(cudaMemPrefetchAsync(dev_Y[dev][0], batch_ysize, dev, NULL));
         checkCuda(cudaMemPrefetchAsync(dev_rowsY[dev][0], sizeof(bool) * batch_size, dev, NULL));
         _set_graph_param(
@@ -414,13 +396,7 @@ void GPUDecompMulti<T>::_infer_flatterned_graph(
           dev_infer_nodes[dev],
           dev_infer_params[dev]
         );
-        _graph_launch(
-          dev,
-          batch_ysize,
-          executors[dev],
-          stream_for_graphs[dev],
-          dev_Y[dev][0]
-        );
+        _graph_launch(executors[dev],stream_for_graphs[dev]);
         beg_inputs = finished_inputs.fetch_add(batch_size);
       }
     });
@@ -452,7 +428,6 @@ template <typename T>
   const size_t batch_ylen,
   const size_t batch_ysize
 ) const {
-
   dim3 threads(2, 512, 1);
   cudaGraph_t graph;
 
@@ -595,13 +570,9 @@ void GPUDecompMulti<T>::_set_graph_param(
 
 template <typename T>
 void GPUDecompMulti<T>::_graph_launch(
-  const int dev_id,
-  const size_t batch_ysize,
   const cudaGraphExec_t& exec,
-  const cudaStream_t& stream_for_graph,
-  T* beg_Y
+  const cudaStream_t& stream_for_graph
 ) const {
-  
   checkCuda(cudaGraphLaunch(exec, stream_for_graph));
   checkCuda(cudaStreamSynchronize(stream_for_graph));
 }

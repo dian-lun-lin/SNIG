@@ -193,7 +193,6 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUTaskflowMulti<T>::infer(
   const size_t num_buff,
   const size_t num_dev
 ) const {
-
   std::cout << "Preprocessing.............................." << std::flush;
   auto pp_beg = std::chrono::steady_clock::now();
 
@@ -337,7 +336,7 @@ void GPUTaskflowMulti<T>:: _infer_taskflow(
         is_end = 0;
       }
       return is_end;
-    }).name("first_fetch_condition"+ std::to_string(dev)));
+    }).name("first_fetch_condition"));
 
     cudaflows.emplace_back(taskflow.emplace([&, dev](tf::cudaFlow& cf){
       cf.device(dev);
@@ -353,7 +352,7 @@ void GPUTaskflowMulti<T>:: _infer_taskflow(
             dev_W[dev][k],
             _h_pinned_weight + (cur_layer + k) * _pp_wlen,
             _pp_wlen
-          ));
+          ).name("Weight_copy_H2D"));
 
           int* roffw = dev_W[dev][k];
           int* colsw = dev_W[dev][k] + _num_neurons_per_layer * _N_SLAB + 1;
@@ -374,7 +373,7 @@ void GPUTaskflowMulti<T>:: _infer_taskflow(
             _bias,
             dev_rowsY[dev][(k + 1) % 2],
             dev_Y[dev][(k + 1) % 2]
-          ));
+          ).name("Kernel"));
         }
       }
 
@@ -390,7 +389,7 @@ void GPUTaskflowMulti<T>:: _infer_taskflow(
           infers[cur_layer].precede(infers[cur_layer + 1]);
         }
       }
-    }).name("GPU" + std::to_string(dev)));
+    }).name("GPU"));
 
     conditions.emplace_back(taskflow.emplace([&, dev](){
       cudaSetDevice(dev);
@@ -404,7 +403,7 @@ void GPUTaskflowMulti<T>:: _infer_taskflow(
         is_end = 0;
       }
       return is_end;
-    }).name("condition"+ std::to_string(dev)));
+    }).name("condition"));
 
   }
 
