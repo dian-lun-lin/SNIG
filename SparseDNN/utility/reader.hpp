@@ -883,7 +883,8 @@ void tsv_file_to_binary_file(
   input_path /= "sparse-images-" + std::to_string(cols) + ".tsv";
   auto data_str = read_file_to_string(input_path);
 
-  T data_array[rows * cols] = {0};
+  auto data_array = std::make_unique<T[]>(rows * cols);
+  std::memset(data_array.get(), 0, sizeof(T) * rows * cols);
 
   std::istringstream read_s(data_str);
   std::vector<std::string> tokens;
@@ -896,7 +897,7 @@ void tsv_file_to_binary_file(
     while(std::getline(lineStream, token, '\t')) {
       tokens.push_back(std::move(token));
     }
-    *(data_array + (std::stoi(tokens[0]) - 1) * cols + std::stoi(tokens[1]) - 1) = to_numeric<T>(tokens[2]);
+    *(data_array.get() + (std::stoi(tokens[0]) - 1) * cols + std::stoi(tokens[1]) - 1) = to_numeric<T>(tokens[2]);
   }
 
   std::fs::path p = input_path.parent_path();
@@ -905,7 +906,7 @@ void tsv_file_to_binary_file(
   std::ofstream out(p, std::ios::out | std::ios::binary);
   out.write((char*)&rows, sizeof(size_t));
   out.write((char*)&cols, sizeof(size_t));
-  out.write((char*)data_array, sizeof(T) * (rows * cols));
+  out.write((char*)data_array.get(), sizeof(T) * (rows * cols));
 }
 
 template <typename T>
@@ -931,7 +932,7 @@ void tsv_file_to_binary_file(
     golden(std::stoi(line) - 1, 0) = 1;
   }   
 
-  std::fs::path p = golden_path.parent_path();
+  auto p = golden_path.parent_path();
   p /= "neuron" + std::to_string(num_features) + "-l" + std::to_string(num_layers) + "-categories.b";
 
   std::ofstream out(p, std::ios::out | std::ios::binary);

@@ -10,7 +10,7 @@ int main(int argc, char* argv[]) {
   //          --weight_path(-w) path of weight
   //          --input_path(-i)  path of input
   //          --golden_path(-g) path of golden
-  //          --golden_all  Convert all golden files if true
+  //          --golden_all  Convert all golden files less or equal to  --layers
 
   // example1:
   //        ./tsv_file_to_binary 
@@ -104,7 +104,7 @@ int main(int argc, char* argv[]) {
     );
   }
   else{
-    for(int i = 120; i <= 1920; i *= 4){
+    for(int i = 120; i <= num_layers; i *= 4){
       sparse_dnn::tsv_file_to_binary_file<float>(
         golden_path,
         num_neurons_per_layer,
