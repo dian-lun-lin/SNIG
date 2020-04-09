@@ -106,6 +106,15 @@ void wo_host_inference_test_2(
   T* Y1
 );
 
+template<typename T>
+__global__
+void identify(
+  T* target_arr,
+  const size_t batch_size,
+  const size_t num_neurons_per_layer,
+  int* result_arr
+);
+
 //-----------------------------------------------------------------------------
 //Definition of task function
 //-----------------------------------------------------------------------------
@@ -545,7 +554,7 @@ void wo_host_inference_test(
   T* Y1
 ) {
 
-  if(rowsY0[blockIdx.x] == false) {
+  if(!rowsY0[blockIdx.x]) {
     //memory reset here
     //avoid calling cudaMemset
     rowsY1[blockIdx.x] = false;
@@ -610,16 +619,18 @@ void wo_host_inference_test_2(
   bool* rowsY1,
   T* Y1
 ) {
-
   int tid = threadIdx.y * blockDim.x + threadIdx.x;
-  if(rowsY0[blockIdx.x] == false) {
+  if(!rowsY0[blockIdx.x]) {
     //memory reset here
     //avoid calling cudaMemset
     if(rowsY1[blockIdx.x]) {
       for(size_t j = tid; j < num_neurons_per_layer; j += blockDim.x * blockDim.y) {
-        Y1[blockIdx.x * num_neurons_per_layer + j] = 0;
+        Y1[blockIdx.x * num_neurons_per_layer + j] = T(0);
       }
-      rowsY1[blockIdx.x] = false;
+      __syncthreads();
+      if(tid == 0) {
+        rowsY1[blockIdx.x] = false;
+      } 
     }
     return;
   }
@@ -631,10 +642,10 @@ void wo_host_inference_test_2(
   __shared__ bool is_nerow[2];
   is_nerow[1] = false;
 
-  for(size_t i = 0; i < N_SLAB; i++) {
+  for(size_t i = 0; i < N_SLAB; ++i) {
     //use stride to reset shRow effectively
-    for(size_t j = tid; j < COL_BLK; j += blockDim.x * blockDim.y) {
-      shRow[j] = 0;  
+    for(size_t k = tid; k < COL_BLK; k += blockDim.x * blockDim.y) {
+      shRow[k] = 0;  
     }
     __syncthreads();
     for(size_t j = threadIdx.y; j < num_neurons_per_layer; j += blockDim.y) {
@@ -664,5 +675,26 @@ void wo_host_inference_test_2(
     rowsY1[blockIdx.x] = is_nerow[1];
   }
 }
+
+template<typename T>
+__global__
+void identify(
+  T* target_arr,
+  const size_t batch_size,
+  const size_t num_neurons_per_layer,
+  int* result_arr
+) {
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  for(int i = tid; i < batch_size; i += gridDim.x * blockDim.x) {
+    T sum = thrust::reduce(
+      thrust::device,
+      target_arr + i * num_neurons_per_layer,
+      target_arr + (i + 1) * num_neurons_per_layer,
+      0,
+      thrust::plus<T>()
+    );
+    result_arr[i] = sum > 0 ? 1 : 0;
+  }
+};
 
 }// end of namespace sparse_dnn ----------------------------------------------
