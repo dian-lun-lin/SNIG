@@ -5,6 +5,7 @@
 #include <SparseDNN/utility/scoring.hpp>
 #include <SparseDNN/utility/utility.hpp>
 #include <SparseDNN/parallel/task.hpp>
+#include <omp.h>
 #include <chrono>
 
 namespace std {
@@ -14,7 +15,7 @@ namespace std {
 namespace sparse_dnn{
 
 template <typename T>  
-class GPUBaseline {
+class GPUBaselineMulti {
 
   static_assert(
     std::is_same<T, float>::value || std::is_same<T, double>::value,
@@ -44,16 +45,21 @@ class GPUBaseline {
       size_t& nnz
     ) const;
 
+    std::tuple<size_t, size_t> _partition(
+      size_t nerowsY,
+      size_t num_dev
+    ) const;
+
   public:
 
-    GPUBaseline(
+    GPUBaselineMulti(
       const std::fs::path& weight_path,
       const T bias = -.3f,
       const size_t num_neurons_per_layer = 1024,
       const size_t num_layers = 120
     );
 
-    ~GPUBaseline();
+    ~GPUBaselineMulti();
     
     size_t num_neurons_per_layer() const;
 
@@ -61,17 +67,18 @@ class GPUBaseline {
 
     Eigen::Matrix<int, Eigen::Dynamic, 1> infer(
       const std::fs::path& input_path,
-      const size_t num_inputs
+      const size_t num_inputs,
+      const size_t num_dev
     ) const;
 
 };
 
 // ----------------------------------------------------------------------------
-// Definition of GPUBaseline
+// Definition of GPUBaselineMulti
 // ----------------------------------------------------------------------------
 
 template <typename T>
-GPUBaseline<T>::GPUBaseline(
+GPUBaselineMulti<T>::GPUBaselineMulti(
   const std::fs::path& weight_path,
   const T bias,
   const size_t num_neurons_per_layer,
@@ -159,67 +166,128 @@ GPUBaseline<T>::GPUBaseline(
 }
 
 template <typename T>
-GPUBaseline<T>:: ~GPUBaseline() {
+GPUBaselineMulti<T>:: ~GPUBaselineMulti() {
   checkCuda(cudaFreeHost(_h_pinned_weight));
 }
 
 template <typename T>
-size_t GPUBaseline<T>::num_neurons_per_layer() const {
+size_t GPUBaselineMulti<T>::num_neurons_per_layer() const {
  return _num_neurons_per_layer; 
 }
 
 template <typename T>
-size_t GPUBaseline<T>::num_layers() const { 
+size_t GPUBaselineMulti<T>::num_layers() const { 
   return _num_layers; 
 }
 
 template <typename T>
-Eigen::Matrix<int, Eigen::Dynamic, 1> GPUBaseline<T>::infer(
-const std::fs::path& input_path,
-  const size_t num_inputs
+Eigen::Matrix<int, Eigen::Dynamic, 1> GPUBaselineMulti<T>::infer(
+  const std::fs::path& input_path,
+  const size_t num_inputs,
+  const size_t num_dev
 ) const {
 
   std::cout << "Preprocessing.............................." << std::flush;
   auto pp_beg = std::chrono::steady_clock::now();
   
   
-  // d_W[0]: present layer 
-  // d_W[1]: next layer
-  int *d_W[2];
-  checkCuda(cudaMalloc(
-    &d_W[0],
-    _pp_wsize
-  ));
-  checkCuda(cudaMalloc(
-    &d_W[1],
-    _pp_wsize
-  ));
-  checkCuda(cudaMemcpy(
-    d_W[0],
-    _h_pinned_weight,
-    _pp_wsize,
-    cudaMemcpyHostToDevice
-  ));
+  std::vector<std::vector<int*> > dev_W;
+  std::vector<int*> W(2, nullptr);
+  for(size_t dev = 0; dev < num_dev; ++dev) {
+    checkCuda(cudaSetDevice(dev));
+    checkCuda(cudaMalloc(
+      &W[0],
+      _pp_wsize
+    ));
+    checkCuda(cudaMalloc(
+      &W[1],
+      _pp_wsize
+    ));
+    checkCuda(cudaMemcpy(
+      W[0],
+      _h_pinned_weight,
+      _pp_wsize,
+      cudaMemcpyHostToDevice
+    ));
+    dev_W.emplace_back(std::move(W));
+  }
+  checkCuda(cudaSetDevice(0));
+
+  //input allocation
+  size_t ylen = num_inputs * _num_neurons_per_layer;
+  size_t ysize = ylen * sizeof(T);
+  size_t ry_size = sizeof(int) * num_inputs;
 
   T* Y[2];  
   int *rowsY[2], *rlenY[2];
 
-  checkCuda(cudaMallocManaged(&Y[0], sizeof(T) * num_inputs * _num_neurons_per_layer));
-  checkCuda(cudaMallocManaged(&Y[1], sizeof(T) * num_inputs * _num_neurons_per_layer));
-  checkCuda(cudaMallocManaged(&rowsY[0], sizeof(int) * num_inputs));
-  checkCuda(cudaMallocManaged(&rowsY[1], sizeof(int) * num_inputs));
-  checkCuda(cudaMallocManaged(&rlenY[0], sizeof(int) * num_inputs));
-  checkCuda(cudaMallocManaged(&rlenY[1], sizeof(int) * num_inputs));
-  checkCuda(cudaMemset(Y[0], 0, sizeof(T) * num_inputs * _num_neurons_per_layer));
-  checkCuda(cudaMemset(Y[1], 0, sizeof(T) * num_inputs * _num_neurons_per_layer));
-  checkCuda(cudaMemset(rowsY[0], 0, sizeof(int) * num_inputs));
-  checkCuda(cudaMemset(rowsY[1], 0, sizeof(int) * num_inputs));
-  checkCuda(cudaMemset(rlenY[0], 0, sizeof(int) * num_inputs));
-  checkCuda(cudaMemset(rlenY[1], 0, sizeof(int) * num_inputs));
+  checkCuda(cudaMallocManaged(&Y[0], ysize));
+  checkCuda(cudaMallocManaged(&Y[1], ysize));
+  checkCuda(cudaMallocManaged(&rowsY[0], ry_size));
+  checkCuda(cudaMallocManaged(&rowsY[1], ry_size));
+  checkCuda(cudaMallocManaged(&rlenY[0], ry_size));
+  checkCuda(cudaMallocManaged(&rlenY[1], ry_size));
+  checkCuda(cudaMemset(Y[0], 0, ysize));
+  checkCuda(cudaMemset(Y[1], 0, ysize));
+  checkCuda(cudaMemset(rowsY[0], 0, ry_size));
+  checkCuda(cudaMemset(rowsY[1], 0, ry_size));
+  checkCuda(cudaMemset(rlenY[0], 0, ry_size));
+  checkCuda(cudaMemset(rlenY[1], 0, ry_size));
   checkCuda(cudaDeviceSynchronize());
 
   size_t nerowsY{0};
   read_input_binary<T>(input_path, Y[0], rlenY[0], rowsY[0], nerowsY);
+
+  size_t quotient{0};
+  size_t remains{0};
+  std::tie(quotient, remains) = _partition(nerowsY, num_dev);
+
+  size_t begRow{0};
+  for(size_t dev = 0; dev < num_dev - 1; ++dev) {
+    for(int buff = 0; buff < 2; ++buff) {
+      checkCuda(cudaMemAdvise(
+        Y[buff] + begRow * _num_neurons_per_layer,
+        quotient * _num_neurons_per_layer * sizeof(T),
+        cudaMemAdviseSetPreferredLocation,
+        dev 
+      ));
+      checkCuda(cudaMemAdvise(
+        rowsY[buff] + begRow,
+        quotient * sizeof(int),
+        cudaMemAdviseSetPreferredLocation,
+        dev 
+      ));
+      checkCuda(cudaMemAdvise(
+        rlenY[buff] + begRow,
+        quotient * sizeof(int),
+        cudaMemAdviseSetPreferredLocation,
+        dev 
+      ));
+    }
+    begRow += quotient;
+  }
+  //last device
+  for(int buff = 0; buff < 2; ++buff) {
+    checkCuda(cudaMemAdvise(
+      Y[buff] + begRow * _num_neurons_per_layer,
+      (quotient + remains) * _num_neurons_per_layer * sizeof(T),
+      cudaMemAdviseSetPreferredLocation,
+      num_dev - 1
+    ));
+    checkCuda(cudaMemAdvise(
+      rowsY[buff] + begRow,
+      (quotient + remains) * sizeof(int),
+      cudaMemAdviseSetPreferredLocation,
+      num_dev - 1 
+    ));
+    checkCuda(cudaMemAdvise(
+      rlenY[buff] + begRow,
+      (quotient + remains) * sizeof(int),
+      cudaMemAdviseSetPreferredLocation,
+      num_dev - 1 
+    ));
+  }
+
 
   auto pp_end = std::chrono::steady_clock::now();
   
@@ -245,36 +313,56 @@ const std::fs::path& input_path,
 
   cudaStream_t stream[2];
 
-  checkCuda(cudaStreamCreate(&stream[0]));
-  checkCuda(cudaStreamCreate(&stream[1]));
 
-  for(size_t cur_layer = 0; cur_layer < _num_layers - 1; ++cur_layer) {
-    checkCuda(cudaMemcpyAsync(
-      d_W[(cur_layer + 1) % 2],
-      _h_pinned_weight + (cur_layer + 1) * (_pp_wlen),
-      _pp_wsize,
-      cudaMemcpyHostToDevice,
-      stream[0]
-    ));
+  for(size_t cur_layer = 0; cur_layer < _num_layers; ++cur_layer) {
+    std::tie(quotient, remains) = _partition(nerowsY, num_dev);
+    #pragma omp parallel 
+    {
+      checkCuda(cudaStreamCreate(&stream[0]));
+      checkCuda(cudaStreamCreate(&stream[1]));
+      int dev = omp_get_thread_num(); 
+      checkCuda(cudaSetDevice(dev));
+      if(cur_layer != _num_layers - 1) {
+        checkCuda(cudaMemcpyAsync(
+          dev_W[dev][(cur_layer + 1) % 2],
+          _h_pinned_weight + (cur_layer + 1) * (_pp_wlen),
+          _pp_wsize,
+          cudaMemcpyHostToDevice,
+          stream[0]
+        ));
+      }
 
-    baseline_inference<T><<<nerowsY, threads, sizeof(T) * _COL_BLK, stream[1]>>>(
-      Y[cur_layer % 2],
-      nerowsY,
-      rowsY[cur_layer % 2],
-      rlenY[cur_layer % 2],
-      _COL_BLK,
-      _N_SLAB,
-      _num_neurons_per_layer,
-      d_W[cur_layer % 2],
-      d_W[cur_layer % 2] + _num_neurons_per_layer * _N_SLAB + 1,
-      (T*)(d_W[cur_layer % 2] + _p_w_index_len),
-      _bias,
-      Y[(cur_layer + 1) % 2],
-      rlenY[(cur_layer + 1) % 2]
-    );
+      int* roffw = dev_W[dev][cur_layer % 2];
+      int* colsw = dev_W[dev][cur_layer % 2] + _num_neurons_per_layer * _N_SLAB + 1;
+      T* valsw = (T*)(dev_W[dev][cur_layer % 2] + _p_w_index_len);
+      size_t handle_nerowsY{0};
+      if(dev == num_dev - 1) {
+        handle_nerowsY = quotient + remains;
+      }
+      else {
+        handle_nerowsY = quotient;
+      }
 
-    checkCuda(cudaStreamSynchronize(stream[1]));
+      baseline_inference<T><<<handle_nerowsY, threads, sizeof(T) * _COL_BLK, stream[1]>>>(
+        Y[cur_layer % 2],
+        handle_nerowsY,
+        rowsY[cur_layer % 2] + quotient * dev,
+        rlenY[cur_layer % 2],
+        _COL_BLK,
+        _N_SLAB,
+        _num_neurons_per_layer,
+        roffw,
+        colsw,
+        valsw,
+        _bias,
+        Y[(cur_layer + 1) % 2],
+        rlenY[(cur_layer + 1) % 2]
+      );
 
+      checkCuda(cudaDeviceSynchronize());
+      checkCuda(cudaStreamDestroy(stream[0]));
+      checkCuda(cudaStreamDestroy(stream[1]));
+    }
     _non_empty_rows(
       num_inputs,
       rlenY[(cur_layer + 1) % 2],
@@ -282,31 +370,12 @@ const std::fs::path& input_path,
       nerowsY
     );
 
-    checkCuda(cudaStreamSynchronize(stream[0]));
-
     checkCuda(cudaMemset(
       Y[cur_layer % 2],
       0,
-      sizeof(T) * num_inputs * _num_neurons_per_layer)
-    );
+      ysize
+    ));
   }
-
-  baseline_inference<T><<<nerowsY, threads, sizeof(T) * _COL_BLK, stream[1]>>>(
-    Y[(_num_layers - 1) % 2],
-    nerowsY,
-    rowsY[(_num_layers - 1) % 2],
-    rlenY[(_num_layers - 1) % 2],
-    _COL_BLK,
-    _N_SLAB,
-    _num_neurons_per_layer,
-    d_W[(_num_layers - 1 ) % 2],
-    d_W[(_num_layers - 1) % 2] + _num_neurons_per_layer * _N_SLAB + 1,
-    (T*)(d_W[(_num_layers - 1) % 2] + _p_w_index_len),
-    _bias,
-    Y[(_num_layers) % 2],
-    rlenY[(_num_layers) % 2]
-  );
-  checkCuda(cudaStreamSynchronize(stream[1]));
 
   auto exec_end = std::chrono::steady_clock::now();
   std::cout << "finished execution with " 
@@ -325,8 +394,6 @@ const std::fs::path& input_path,
             << "ms"
             << std::endl;
 
-  checkCuda(cudaStreamDestroy(stream[0]));
-  checkCuda(cudaStreamDestroy(stream[1]));
   
   checkCuda(cudaFree(Y[0]));
   checkCuda(cudaFree(Y[1]));
@@ -334,26 +401,38 @@ const std::fs::path& input_path,
   checkCuda(cudaFree(rowsY[1]));
   checkCuda(cudaFree(rlenY[0]));
   checkCuda(cudaFree(rlenY[1]));
-  checkCuda(cudaFree(d_W[0]));
-  checkCuda(cudaFree(d_W[1]));
+  for(auto& each_dev_W : dev_W) {
+    for(auto& w : each_dev_W) {
+      checkCuda(cudaFree(w));
+    }
+  }
 
   return score;
 }
 
 template <typename T>
-void GPUBaseline<T>::_non_empty_rows(
+void GPUBaselineMulti<T>::_non_empty_rows(
   const size_t num_inputs,
   int* rlenY,
   int* rowsY,
   size_t& nnz
 ) const {
   nnz = 0;
-
   for(size_t i = 0; i < num_inputs; ++i) {
     if(rlenY[i] > 0) {
       rowsY[nnz++] = i;
     }
   }
+}
+
+template <typename T>
+std::tuple<size_t, size_t> GPUBaselineMulti<T>::_partition(
+  size_t nerowsY,
+  size_t num_dev
+) const {
+  size_t quotient = nerowsY / num_dev;
+  size_t remains = nerowsY % num_dev;
+  return std::tie(quotient, remains);
 }
 
 

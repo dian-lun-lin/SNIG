@@ -86,6 +86,15 @@ int main(int argc, char* argv[]) {
     );
     result = GPU_baseline.infer(input_path, 60000);
   }
+  if(mode == "GPU_baseline_multiple") {
+    sparse_dnn::GPUBaselineMulti<float> GPU_baseline_multi(
+      weight_path, 
+      bias,
+      num_neurons_per_layer, 
+      num_layers
+    );
+    result = GPU_baseline_multi.infer(input_path, 60000, 1);
+  }
   //else if(mode == "GPU_cugraph") {
     //sparse_dnn::GPUCugraph<float> GPU_cugraph(
       //weight_path, 
