@@ -8,6 +8,7 @@
 #include "parallel/GPU_taskflow.hpp"
 //#include "parallel/GPU_taskflow_multiple.hpp"
 #include "parallel/GPU_taskflow_multiple_test.hpp"
+#include "parallel/GPU_taskflow_add_ident.hpp"
 
 
 

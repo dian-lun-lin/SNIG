@@ -131,6 +131,15 @@ int main(int argc, char* argv[]) {
     );
     result = GPU_taskflow_multi.infer(input_path, 60000, 5000, 10, 4);
   }
+  else if(mode == "GPU_taskflow_add_ident") {
+    sparse_dnn::GPUTaskflowAddIdent<float> GPU_taskflow_add_ident(
+      weight_path, 
+      bias,
+      num_neurons_per_layer, 
+      num_layers
+    );
+    result = GPU_taskflow_add_ident.infer(input_path, 60000, 5000, 10, 4);
+  }
   auto golden = sparse_dnn::read_golden_binary(golden_path);
   if(sparse_dnn::is_passed(result, golden)) {
     std::cout << "CHALLENGE PASSED\n";

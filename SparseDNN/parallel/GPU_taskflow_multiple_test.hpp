@@ -241,6 +241,7 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUTaskflowMulti<T>::infer(
     dev_Y.push_back(Y);
     dev_rowsY.push_back(rowsY);
   }
+  cudaSetDevice(0);
 
   read_input_binary<T>(input_path, batch_size, source_Y);
 
@@ -421,6 +422,5 @@ void GPUTaskflowMulti<T>:: _infer_taskflow(
 
   checkCuda(cudaSetDevice(0));
 }
-
 
 }// end of namespace sparse_dnn ----------------------------------------------
