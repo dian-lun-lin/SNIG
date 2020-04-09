@@ -13,7 +13,7 @@ std::vector<Eigen::SparseMatrix<T> > slice_by_row(
 );
 
 template<typename T>
-std::vector<T* > slice_by_row(
+std::vector<T*> slice_by_row(
   const T*,
   const size_t num_slices
 );
@@ -49,6 +49,12 @@ void eigen_sparse_to_CSR_array(
   SparseArray<T>& arr
 );
 
+inline
+Eigen::Matrix<int, Eigen::Dynamic, 1> arr_to_Eigen_int(
+  const int* arr,
+  const size_t arr_len
+);
+
 
 //-----------------------------------------------------------------------------
 //Definition of reader function
@@ -71,9 +77,9 @@ std::vector<Eigen::SparseMatrix<T> > slice_by_row(
   triplet_list.reserve((rows_per_slice * target.cols()) / 1000);
   int counter = 0;
   Eigen::SparseMatrix<T> tmp(rows_per_slice, target.cols());
-  for (int k = 0; k<target.outerSize(); ++k){
-    for (typename Eigen::SparseMatrix<T, Eigen::RowMajor>::InnerIterator it(target, k); it;){
-      if(it.row() < rows_per_slice * (counter + 1)){
+  for (int k = 0; k<target.outerSize(); ++k) {
+    for (typename Eigen::SparseMatrix<T, Eigen::RowMajor>::InnerIterator it(target, k); it;) {
+      if(it.row() < rows_per_slice * (counter + 1)) {
         triplet_list.emplace_back(
               it.row() - (rows_per_slice*(counter)),
               it.col(),
@@ -162,14 +168,26 @@ Eigen::SparseMatrix<T> CSR_matrix_to_eigen_sparse(
 ) {
   Eigen::SparseMatrix<T> result(rows, cols);
   result.reserve(rows*cols / 1000);
-  for(size_t i = 0; i < rows; ++i){
-    for(size_t j = mat.row_array[i]; j < mat.row_array[i + 1]; ++j){
+  for(size_t i = 0; i < rows; ++i) {
+    for(size_t j = mat.row_array[i]; j < mat.row_array[i + 1]; ++j) {
       result.coeffRef(i, mat.col_array[j]) =  mat.data_array[j];
     }
   }
   result.makeCompressed();
   return result;
 }
+
+inline
+Eigen::Matrix<int, Eigen::Dynamic, 1> arr_to_Eigen_int(
+  const int* arr,
+  const size_t arr_len
+) {
+  Eigen::Matrix<int, Eigen::Dynamic, 1> result(arr_len, 1);
+  for(size_t i = 0; i < arr_len; ++i) {
+    result(i, 1) = arr[i];
+  }
+  return result;
+};
 
 
 }// end of namespace sparse_dnn ----------------------------------------------

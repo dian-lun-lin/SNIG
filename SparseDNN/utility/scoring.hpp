@@ -41,7 +41,7 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> get_score(
   const Eigen::SparseMatrix<T>& target
 ) {
 
-  Eigen::Matrix<T, Eigen::Dynamic, 1> result = (target * Eigen::Matrix<T, Eigen::Dynamic, 1>::Ones(target.cols()));
+  Eigen::Matrix<T, Eigen::Dynamic, 1> result = target * Eigen::Matrix<T, Eigen::Dynamic, 1>::Ones(target.cols());
 
   Eigen::Matrix<int, Eigen::Dynamic, 1> score = result.unaryExpr([] (T a) {
     if(a > 0) return 1;
@@ -58,26 +58,13 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> get_score(
 ) {
 
   Eigen::Matrix<int, Eigen::Dynamic, 1> score(rows, 1);
-  for(size_t i = 0; i < rows; ++i){
+  for(size_t i = 0; i < rows; ++i) {
     int beg = target.row_array[i];
     int end = target.row_array[i + 1];
     T sum = std::accumulate(target.data_array + beg, target.data_array + end, 0);
     score(i, 0) = sum > 0 ? 1 : 0;
   }
   return score;
-}
-
-inline
-bool is_passed(
-    const Eigen::Matrix<int, Eigen::Dynamic, 1>& output,
-    const Eigen::Matrix<int, Eigen::Dynamic, 1>& golden
-) {
-
-  int check = output.rows() - output.cwiseEqual(golden).count();
-  std::cout << "\nNumber of different categories: " << check << std::endl;
-
-  return (check == 0);
-
 }
 
 template<typename T>
@@ -88,11 +75,21 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> get_score(
 ) {
 
   Eigen::Matrix<int, Eigen::Dynamic, 1> score(rows, 1);
-  for(size_t i = 0; i < rows; ++i){
+  for(size_t i = 0; i < rows; ++i) {
     T sum = std::accumulate(arr + i * cols, arr + (i+1) * cols, 0);
     score(i, 0) = sum > 0 ? 1 : 0;
   }
   return score;
+}
+
+inline
+bool is_passed(
+  const Eigen::Matrix<int, Eigen::Dynamic, 1>& output,
+  const Eigen::Matrix<int, Eigen::Dynamic, 1>& golden
+) {
+  int check = output.rows() - output.cwiseEqual(golden).count();
+  std::cout << "\nNumber of different categories: " << check << std::endl;
+  return (check == 0);
 }
 
 }// end of namespace sparse_dnn ----------------------------------------------
