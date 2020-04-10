@@ -310,12 +310,12 @@ void GPUTaskflowMulti<T>:: _infer_taskflow(
 ) const {
   tf::Taskflow taskflow("SparseDNN");
   tf::Executor executor;
-  std::vector<tf::Task> first_fetch_conditions;
+  std::vector<tf::Task> first_fetchs;
   std::vector<tf::Task> cudaflows;
-  std::vector<tf::Task> conditions;
-  first_fetch_conditions.reserve(num_dev);
+  std::vector<tf::Task> fetchs;
+  first_fetchs.reserve(num_dev);
   cudaflows.reserve(num_dev);
-  conditions.reserve(num_dev);
+  fetchs.reserve(num_dev);
 
   //beg_inputs indicate where to copy inputs for each GPU
   std::atomic<size_t> finished_inputs{0};
@@ -327,7 +327,7 @@ void GPUTaskflowMulti<T>:: _infer_taskflow(
   tf::Task start = taskflow.emplace([](){}).name("start");
 
   for(size_t dev = 0; dev < num_dev; ++dev) {
-    first_fetch_conditions.emplace_back(taskflow.emplace([&, dev](){
+    first_fetchs.emplace_back(taskflow.emplace([&, dev](){
       cudaSetDevice(dev);
       int is_end = 1;
       size_t batch = finished_inputs.fetch_add(batch_size);
@@ -343,7 +343,7 @@ void GPUTaskflowMulti<T>:: _infer_taskflow(
         is_end = 0;
       }
       return is_end;
-    }).name("first_fetch_condition"));
+    }).name("first_fetch"));
 
     cudaflows.emplace_back(taskflow.emplace([&, dev](tf::cudaFlow& cf){
       cf.device(dev);
@@ -409,7 +409,7 @@ void GPUTaskflowMulti<T>:: _infer_taskflow(
       result_copy.succeed(infers[_num_layers - 1]);
     }).name("GPU"));
 
-    conditions.emplace_back(taskflow.emplace([&, dev](){
+    fetchs.emplace_back(taskflow.emplace([&, dev](){
       cudaSetDevice(dev);
       int is_end = 1;
       size_t batch = finished_inputs.fetch_add(batch_size);
@@ -425,7 +425,7 @@ void GPUTaskflowMulti<T>:: _infer_taskflow(
         is_end = 0;
       }
       return is_end;
-    }).name("Condition"));;
+    }).name("fetch"));;
 
   }
 
@@ -433,10 +433,10 @@ void GPUTaskflowMulti<T>:: _infer_taskflow(
 
   //dependencies of taskflow
   for(size_t dev = 0; dev < num_dev; ++dev) {
-    start.precede(first_fetch_conditions[dev]);
-    first_fetch_conditions[dev].precede(cudaflows[dev], stop);
-    cudaflows[dev].precede(conditions[dev]);
-    conditions[dev].precede(cudaflows[dev], stop);
+    start.precede(first_fetchs[dev]);
+    first_fetchs[dev].precede(cudaflows[dev], stop);
+    cudaflows[dev].precede(fetchs[dev]);
+    fetchs[dev].precede(cudaflows[dev], stop);
   }
   
   executor.run(taskflow).wait();
