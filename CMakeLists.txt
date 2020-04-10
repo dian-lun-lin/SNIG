@@ -75,6 +75,9 @@ find_package(CUDA QUIET REQUIRED)
 # Thread
 find_package(Threads REQUIRED)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
+#OpenMP
+find_package(OpenMP REQUIRED)
+set(OpenMP_CXX_FLAGS "-fopenmp")
 
 # message
 message(STATUS "CMAKE_HOST_SYSTEM: ${CMAKE_HOST_SYSTEM}")
@@ -99,8 +102,6 @@ include_directories(${PROJECT_SOURCE_DIR}/3rd-party/)
 include_directories(/usr/local/cuda/include/)
 link_directories(/usr/local/cuda/lib64/)
 
-#OpenMP
-find_package(OpenMP REQUIRED)
 
 #--------interface------
 add_library(${PROJECT_NAME} INTERFACE)
@@ -147,13 +148,13 @@ target_include_directories(${PROJECT_NAME} INTERFACE
 message(STATUS "building executables ...")
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
-set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS}" "-lineinfo -arch=sm_75 \ -gencode=arch=compute_75,code=compute_75" )
+set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS}" "-lineinfo -arch=sm_75 \ -gencode=arch=compute_75,code=compute_75 -Xcompiler -fopenmp" )
 
 cuda_add_executable(main_cuda ${PROJECT_SOURCE_DIR}/main/main.cu)
 target_link_libraries(main_cuda stdc++fs cusparse OpenMP::OpenMP_CXX sparse_dnn::default_settings)
 
-add_executable(main ${PROJECT_SOURCE_DIR}/main/main.cpp)
-target_link_libraries(main ${PROJECT_NAME} Threads::Threads stdc++fs sparse_dnn::default_settings)
+#add_executable(main ${PROJECT_SOURCE_DIR}/main/main.cpp)
+#target_link_libraries(main ${PROJECT_NAME} Threads::Threads stdc++fs sparse_dnn::default_settings)
 
 #cuda_add_executable(tsv_file_to_binary ${PROJECT_SOURCE_DIR}/main/tsv_file_to_binary.cu)
 #target_link_libraries(tsv_file_to_binary ${PROJECT_NAME} stdc++fs sparse_dnn::default_settings)

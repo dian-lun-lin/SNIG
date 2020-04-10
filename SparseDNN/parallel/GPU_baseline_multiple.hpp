@@ -192,6 +192,7 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUBaselineMulti<T>::infer(
   
   
   std::vector<std::vector<int*> > dev_W;
+  dev_W.reserve(num_dev);
   std::vector<int*> W(2, nullptr);
   for(size_t dev = 0; dev < num_dev; ++dev) {
     checkCuda(cudaSetDevice(dev));
@@ -209,7 +210,7 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUBaselineMulti<T>::infer(
       _pp_wsize,
       cudaMemcpyHostToDevice
     ));
-    dev_W.emplace_back(std::move(W));
+    dev_W.emplace_back(W);
   }
   checkCuda(cudaSetDevice(0));
 
@@ -311,24 +312,28 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUBaselineMulti<T>::infer(
 
   auto exec_beg = std::chrono::steady_clock::now();
 
-  cudaStream_t stream[2];
-
+  std::vector<std::vector<cudaStream_t> > dev_stream;
+  dev_stream.reserve(num_dev);
+  std::vector<cudaStream_t> stream(2);
+  for(size_t dev = 0; dev < num_dev; ++dev) {
+    dev_stream.emplace_back(stream);
+  }
+  
 
   for(size_t cur_layer = 0; cur_layer < _num_layers; ++cur_layer) {
-    std::tie(quotient, remains) = _partition(nerowsY, num_dev);
-    #pragma omp parallel 
+    #pragma omp parallel num_threads(num_dev)
     {
-      checkCuda(cudaStreamCreate(&stream[0]));
-      checkCuda(cudaStreamCreate(&stream[1]));
       int dev = omp_get_thread_num(); 
       checkCuda(cudaSetDevice(dev));
+      checkCuda(cudaStreamCreate(&dev_stream[dev][0]));
+      checkCuda(cudaStreamCreate(&dev_stream[dev][1]));
       if(cur_layer != _num_layers - 1) {
         checkCuda(cudaMemcpyAsync(
           dev_W[dev][(cur_layer + 1) % 2],
           _h_pinned_weight + (cur_layer + 1) * (_pp_wlen),
           _pp_wsize,
           cudaMemcpyHostToDevice,
-          stream[0]
+          dev_stream[dev][0]
         ));
       }
 
@@ -342,8 +347,8 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUBaselineMulti<T>::infer(
       else {
         handle_nerowsY = quotient;
       }
-
-      baseline_inference<T><<<handle_nerowsY, threads, sizeof(T) * _COL_BLK, stream[1]>>>(
+      
+      baseline_inference<T><<<handle_nerowsY, threads, sizeof(T) * _COL_BLK, dev_stream[dev][1]>>>(
         Y[cur_layer % 2],
         handle_nerowsY,
         rowsY[cur_layer % 2] + quotient * dev,
@@ -360,16 +365,17 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUBaselineMulti<T>::infer(
       );
 
       checkCuda(cudaDeviceSynchronize());
-      checkCuda(cudaStreamDestroy(stream[0]));
-      checkCuda(cudaStreamDestroy(stream[1]));
+      checkCuda(cudaStreamDestroy(dev_stream[dev][0]));
+      checkCuda(cudaStreamDestroy(dev_stream[dev][1]));
     }
+
     _non_empty_rows(
       num_inputs,
       rlenY[(cur_layer + 1) % 2],
       rowsY[(cur_layer + 1) % 2],
       nerowsY
     );
-
+    std::tie(quotient, remains) = _partition(nerowsY, num_dev);
     checkCuda(cudaMemset(
       Y[cur_layer % 2],
       0,
@@ -434,6 +440,5 @@ std::tuple<size_t, size_t> GPUBaselineMulti<T>::_partition(
   size_t remains = nerowsY % num_dev;
   return std::tie(quotient, remains);
 }
-
 
 }// end of namespace sparse_dnn ----------------------------------------------
