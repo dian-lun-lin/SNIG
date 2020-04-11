@@ -268,7 +268,7 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> SNIGCudaGraph<T>::infer(
     dev_rowsY.push_back(rowsY);
   }
 
-  read_input_binary<T>(input_path, batch_size, source_Y);
+  read_input_binary<T>(input_path, source_Y);
 
   auto pp_end = std::chrono::steady_clock::now();
   

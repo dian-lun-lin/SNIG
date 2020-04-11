@@ -217,8 +217,6 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> BFOneGpuCudaGraph<T>::infer(
   checkCuda(cudaMallocManaged(&rowsY[1], sizeof(int) * num_inputs));
   checkCuda(cudaMallocManaged(&rlenY[0], sizeof(int) * num_inputs));
   checkCuda(cudaMallocManaged(&rlenY[1], sizeof(int) * num_inputs));
-  checkCuda(cudaMemset(Y[0], 0, sizeof(T) * num_inputs * _num_neurons_per_layer));
-  checkCuda(cudaMemset(Y[1], 0, sizeof(T) * num_inputs * _num_neurons_per_layer));
   checkCuda(cudaMemset(rowsY[0], 0, sizeof(int) * num_inputs));
   checkCuda(cudaMemset(rowsY[1], 0, sizeof(int) * num_inputs));
   checkCuda(cudaMemset(rlenY[0], 0, sizeof(int) * num_inputs));
