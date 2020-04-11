@@ -245,14 +245,16 @@ const std::fs::path& input_path,
   checkCuda(cudaStreamCreate(&stream[0]));
   checkCuda(cudaStreamCreate(&stream[1]));
 
-  for(size_t cur_layer = 0; cur_layer < _num_layers - 1; ++cur_layer) {
-    checkCuda(cudaMemcpyAsync(
-      d_W[(cur_layer + 1) % 2],
-      _h_pinned_weight + (cur_layer + 1) * (_pp_wlen),
-      _pp_wsize,
-      cudaMemcpyHostToDevice,
-      stream[0]
-    ));
+  for(size_t cur_layer = 0; cur_layer < _num_layers; ++cur_layer) {
+    if(cur_layer != _num_layers - 1) {
+      checkCuda(cudaMemcpyAsync(
+        d_W[(cur_layer + 1) % 2],
+        _h_pinned_weight + (cur_layer + 1) * (_pp_wlen),
+        _pp_wsize,
+        cudaMemcpyHostToDevice,
+        stream[0]
+      ));
+    }
 
     bf_inference<T><<<nerowsY, threads, sizeof(T) * _COL_BLK, stream[1]>>>(
       Y[cur_layer % 2],
@@ -279,31 +281,13 @@ const std::fs::path& input_path,
       nerowsY
     );
 
-    checkCuda(cudaStreamSynchronize(stream[0]));
-
     checkCuda(cudaMemset(
       Y[cur_layer % 2],
       0,
       sizeof(T) * num_inputs * _num_neurons_per_layer)
     );
+    checkCuda(cudaStreamSynchronize(stream[0]));
   }
-
-  bf_inference<T><<<nerowsY, threads, sizeof(T) * _COL_BLK, stream[1]>>>(
-    Y[(_num_layers - 1) % 2],
-    nerowsY,
-    rowsY[(_num_layers - 1) % 2],
-    rlenY[(_num_layers - 1) % 2],
-    _COL_BLK,
-    _N_SLAB,
-    _num_neurons_per_layer,
-    d_W[(_num_layers - 1 ) % 2],
-    d_W[(_num_layers - 1) % 2] + _num_neurons_per_layer * _N_SLAB + 1,
-    (T*)(d_W[(_num_layers - 1) % 2] + _p_w_index_len),
-    _bias,
-    Y[(_num_layers) % 2],
-    rlenY[(_num_layers) % 2]
-  );
-  checkCuda(cudaStreamSynchronize(stream[1]));
 
   auto exec_end = std::chrono::steady_clock::now();
   std::cout << "finished execution with " 

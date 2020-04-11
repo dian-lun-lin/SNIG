@@ -354,13 +354,13 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> BFMultiGpu<T>::infer(
   }
   
 
-  for(size_t cur_layer = 0; cur_layer < _num_layers; ++cur_layer) {
-    #pragma omp parallel num_threads(num_dev)
-    {
-      int dev = omp_get_thread_num(); 
-      checkCuda(cudaSetDevice(dev));
-      checkCuda(cudaStreamCreate(&dev_stream[dev][0]));
-      checkCuda(cudaStreamCreate(&dev_stream[dev][1]));
+  #pragma omp parallel num_threads(num_dev)
+  {
+    int dev = omp_get_thread_num(); 
+    checkCuda(cudaSetDevice(dev));
+    checkCuda(cudaStreamCreate(&dev_stream[dev][0]));
+    checkCuda(cudaStreamCreate(&dev_stream[dev][1]));
+    for(size_t cur_layer = 0; cur_layer < _num_layers; ++cur_layer) {
       if(cur_layer != _num_layers - 1) {
         checkCuda(cudaMemcpyAsync(
           dev_W[dev][(cur_layer + 1) % 2],
@@ -390,7 +390,7 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> BFMultiGpu<T>::infer(
         dev_Y[dev][(cur_layer + 1) % 2],
         dev_rlenY[dev][(cur_layer + 1) % 2]
       );
-      checkCuda(cudaDeviceSynchronize());
+      checkCuda(cudaStreamSynchronize(dev_stream[dev][1]));
 
       if(dev == num_dev - 1) {
         //last device
@@ -419,9 +419,11 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> BFMultiGpu<T>::infer(
           (each_partition) * _num_neurons_per_layer * sizeof(T)
         ));
       }
-      checkCuda(cudaStreamDestroy(dev_stream[dev][0]));
-      checkCuda(cudaStreamDestroy(dev_stream[dev][1]));
+      checkCuda(cudaStreamSynchronize(dev_stream[dev][0]));
+      #pragma omp barrier
     }
+    checkCuda(cudaStreamDestroy(dev_stream[dev][0]));
+    checkCuda(cudaStreamDestroy(dev_stream[dev][1]));
   }
 
   auto exec_end = std::chrono::steady_clock::now();
