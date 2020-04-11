@@ -46,11 +46,6 @@ class BFMultiGpu {
       size_t& nnz
     ) const;
 
-    std::tuple<size_t, size_t> _partition(
-      size_t nerowsY,
-      size_t num_dev
-    ) const;
-
   public:
 
     BFMultiGpu(
@@ -187,11 +182,16 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> BFMultiGpu<T>::infer(
   const size_t num_inputs,
   const size_t num_dev
 ) const {
+  //Due to without NVlink,
+  //this implementation doesn't do load balancing.
+  //It actually let GPUs work in their own partition Ys
+  //Hence, rowsY for each GPU should be indexed individually.
 
   std::cout << "Preprocessing.............................." << std::flush;
   auto pp_beg = std::chrono::steady_clock::now();
   
   
+  //weight allocation
   std::vector<std::vector<int*> > dev_W;
   dev_W.reserve(num_dev);
   std::vector<int*> W(2, nullptr);
@@ -218,78 +218,108 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> BFMultiGpu<T>::infer(
   //input allocation
   size_t ylen = num_inputs * _num_neurons_per_layer;
   size_t ysize = ylen * sizeof(T);
-  size_t ry_size = sizeof(int) * num_inputs;
+  size_t ry_size = num_inputs * sizeof(int);
 
-  T* Y[2];  
-  int *rowsY[2], *rlenY[2];
-
-  checkCuda(cudaMallocManaged(&Y[0], ysize));
-  checkCuda(cudaMallocManaged(&Y[1], ysize));
+  std::vector<int*> rowsY(2, nullptr);
+  std::vector<int*> rlenY(2, nullptr);
+  std::vector<T*> Y(2, nullptr);  
   checkCuda(cudaMallocManaged(&rowsY[0], ry_size));
   checkCuda(cudaMallocManaged(&rowsY[1], ry_size));
   checkCuda(cudaMallocManaged(&rlenY[0], ry_size));
   checkCuda(cudaMallocManaged(&rlenY[1], ry_size));
-  checkCuda(cudaMemset(Y[0], 0, ysize));
-  checkCuda(cudaMemset(Y[1], 0, ysize));
+  checkCuda(cudaMallocManaged(&Y[0], ysize));
+  checkCuda(cudaMallocManaged(&Y[1], ysize));
   checkCuda(cudaMemset(rowsY[0], 0, ry_size));
   checkCuda(cudaMemset(rowsY[1], 0, ry_size));
-  checkCuda(cudaMemset(rlenY[0], 0, ry_size));
+  checkCuda(cudaMemset(rlenY[0], 1, ry_size));
   checkCuda(cudaMemset(rlenY[1], 0, ry_size));
-  checkCuda(cudaDeviceSynchronize());
 
-  size_t nerowsY{0};
-  read_input_binary<T>(input_path, Y[0], rlenY[0], rowsY[0], nerowsY);
+  read_input_binary<T>(input_path, Y[0]);
 
-  size_t quotient{0};
-  size_t remains{0};
-  std::tie(quotient, remains) = _partition(nerowsY, num_dev);
+  //partition
+  //assume all rows of inputs are non-empty.
+  size_t each_partition = num_inputs / num_dev;
+  size_t remains = num_inputs % num_dev;
 
-  size_t begRow{0};
+  //use dev_Y, dev_rowsY,  dev_rlenY, and dev_nerowsY to record each GPUs's own data
+  std::vector<std::vector<int*> > dev_rowsY;
+  std::vector<std::vector<int*> > dev_rlenY;
+  std::vector<std::vector<T*> > dev_Y;
+  std::vector<size_t> dev_nerowsY;
+  dev_rowsY.reserve(num_dev);
+  dev_rlenY.reserve(num_dev);
+  dev_Y.reserve(num_dev);
+  dev_nerowsY.reserve(num_dev);
+  
+  std::vector<int*> each_GPU_rowsY(2, nullptr);
+  std::vector<int*> each_GPU_rlenY(2, nullptr);
+  std::vector<T*> each_GPU_Y(2, nullptr);
+  for(size_t dev = 0 ; dev < num_dev; ++dev) {
+    dev_nerowsY.emplace_back(each_partition);
+    for(int buff = 0; buff < 2; ++buff) {
+      each_GPU_rowsY[buff] = rowsY[buff] + dev * each_partition; 
+      each_GPU_rlenY[buff] = rlenY[buff] + dev * each_partition; 
+      each_GPU_Y[buff] = Y[buff] + dev * each_partition * _num_neurons_per_layer;
+    }
+    dev_rowsY.emplace_back(each_GPU_rowsY);
+    dev_rlenY.emplace_back(each_GPU_rlenY);
+    dev_Y.emplace_back(each_GPU_Y);
+  }
+  //last device
+  dev_nerowsY[num_dev - 1] += remains;
+  
+  //rowsY should be indexed by each GPUs' own partition inputs, rather than indexed by whole inputs
+  for(size_t dev = 0; dev < num_dev - 1; ++dev) {
+    _non_empty_rows(each_partition, dev_rlenY[dev][0], dev_rowsY[dev][0], dev_nerowsY[dev]);
+  }
+  //last device
+  _non_empty_rows(each_partition + remains, dev_rlenY[num_dev - 1][0], dev_rowsY[num_dev - 1][0], dev_nerowsY[num_dev - 1]);
+  
+  //Advise
   for(size_t dev = 0; dev < num_dev - 1; ++dev) {
     for(int buff = 0; buff < 2; ++buff) {
       checkCuda(cudaMemAdvise(
-        Y[buff] + begRow * _num_neurons_per_layer,
-        quotient * _num_neurons_per_layer * sizeof(T),
+        dev_Y[dev][buff],
+        each_partition * _num_neurons_per_layer * sizeof(T),
         cudaMemAdviseSetPreferredLocation,
         dev 
       ));
       checkCuda(cudaMemAdvise(
-        rowsY[buff] + begRow,
-        quotient * sizeof(int),
+        dev_rowsY[dev][buff],
+        each_partition * sizeof(int),
         cudaMemAdviseSetPreferredLocation,
         dev 
       ));
       checkCuda(cudaMemAdvise(
-        rlenY[buff] + begRow,
-        quotient * sizeof(int),
+        dev_rlenY[dev][buff],
+        each_partition * sizeof(int),
         cudaMemAdviseSetPreferredLocation,
         dev 
       ));
     }
-    begRow += quotient;
   }
-  //last device
+
+  //Advise for last device
   for(int buff = 0; buff < 2; ++buff) {
     checkCuda(cudaMemAdvise(
-      Y[buff] + begRow * _num_neurons_per_layer,
-      (quotient + remains) * _num_neurons_per_layer * sizeof(T),
+      dev_Y[num_dev - 1][buff],
+      (each_partition + remains) * _num_neurons_per_layer * sizeof(T),
       cudaMemAdviseSetPreferredLocation,
       num_dev - 1
     ));
     checkCuda(cudaMemAdvise(
-      rowsY[buff] + begRow,
-      (quotient + remains) * sizeof(int),
+      dev_rowsY[num_dev - 1][buff],
+      (each_partition + remains) * sizeof(int),
       cudaMemAdviseSetPreferredLocation,
       num_dev - 1 
     ));
     checkCuda(cudaMemAdvise(
-      rlenY[buff] + begRow,
-      (quotient + remains) * sizeof(int),
+      dev_rlenY[num_dev - 1][buff],
+      (each_partition + remains) * sizeof(int),
       cudaMemAdviseSetPreferredLocation,
       num_dev - 1 
     ));
   }
-
 
   auto pp_end = std::chrono::steady_clock::now();
   
@@ -307,7 +337,10 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> BFMultiGpu<T>::infer(
   else if(_num_neurons_per_layer == 16384) {
     dim_y = 64;
   }
-  dim3 threads(4, dim_y, 1);
+  else if(_num_neurons_per_layer == 65536) {
+    dim_y = 128;
+  }
+  dim3 threads(2, dim_y, 1);
 
   std::cout << "Start inference............................" << std::flush;
 
@@ -341,19 +374,12 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> BFMultiGpu<T>::infer(
       int* roffw = dev_W[dev][cur_layer % 2];
       int* colsw = dev_W[dev][cur_layer % 2] + _num_neurons_per_layer * _N_SLAB + 1;
       T* valsw = (T*)(dev_W[dev][cur_layer % 2] + _p_w_index_len);
-      size_t handle_nerowsY{0};
-      if(dev == num_dev - 1) {
-        handle_nerowsY = quotient + remains;
-      }
-      else {
-        handle_nerowsY = quotient;
-      }
-      
-      bf_inference<T><<<handle_nerowsY, threads, sizeof(T) * _COL_BLK, dev_stream[dev][1]>>>(
-        Y[cur_layer % 2],
-        handle_nerowsY,
-        rowsY[cur_layer % 2] + quotient * dev,
-        rlenY[cur_layer % 2],
+
+      bf_inference<T><<<dev_nerowsY[dev], threads, sizeof(T) * _COL_BLK, dev_stream[dev][1]>>>(
+        dev_Y[dev][cur_layer % 2],
+        dev_nerowsY[dev],
+        dev_rowsY[dev][cur_layer % 2],
+        dev_rlenY[dev][cur_layer % 2],
         _COL_BLK,
         _N_SLAB,
         _num_neurons_per_layer,
@@ -361,27 +387,41 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> BFMultiGpu<T>::infer(
         colsw,
         valsw,
         _bias,
-        Y[(cur_layer + 1) % 2],
-        rlenY[(cur_layer + 1) % 2]
+        dev_Y[dev][(cur_layer + 1) % 2],
+        dev_rlenY[dev][(cur_layer + 1) % 2]
       );
-
       checkCuda(cudaDeviceSynchronize());
+
+      if(dev == num_dev - 1) {
+        //last device
+        _non_empty_rows(
+          each_partition + remains,
+          dev_rlenY[dev][(cur_layer + 1) % 2],
+          dev_rowsY[dev][(cur_layer + 1) % 2],
+          dev_nerowsY[dev]
+        );
+        checkCuda(cudaMemset(
+          dev_Y[dev][cur_layer % 2],
+          0,
+          (each_partition + remains) * _num_neurons_per_layer * sizeof(T)
+        ));
+      }
+      else {
+        _non_empty_rows(
+          each_partition,
+          dev_rlenY[dev][(cur_layer + 1) % 2],
+          dev_rowsY[dev][(cur_layer + 1) % 2],
+          dev_nerowsY[dev]
+        );
+        checkCuda(cudaMemset(
+          dev_Y[dev][cur_layer % 2],
+          0,
+          (each_partition) * _num_neurons_per_layer * sizeof(T)
+        ));
+      }
       checkCuda(cudaStreamDestroy(dev_stream[dev][0]));
       checkCuda(cudaStreamDestroy(dev_stream[dev][1]));
     }
-
-    _non_empty_rows(
-      num_inputs,
-      rlenY[(cur_layer + 1) % 2],
-      rowsY[(cur_layer + 1) % 2],
-      nerowsY
-    );
-    std::tie(quotient, remains) = _partition(nerowsY, num_dev);
-    checkCuda(cudaMemset(
-      Y[cur_layer % 2],
-      0,
-      ysize
-    ));
   }
 
   auto exec_end = std::chrono::steady_clock::now();
@@ -430,16 +470,6 @@ void BFMultiGpu<T>::_non_empty_rows(
       rowsY[nnz++] = i;
     }
   }
-}
-
-template <typename T>
-std::tuple<size_t, size_t> BFMultiGpu<T>::_partition(
-  size_t nerowsY,
-  size_t num_dev
-) const {
-  size_t quotient = nerowsY / num_dev;
-  size_t remains = nerowsY % num_dev;
-  return std::tie(quotient, remains);
 }
 
 }// end of namespace snig ----------------------------------------------

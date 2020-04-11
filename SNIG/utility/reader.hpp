@@ -166,7 +166,6 @@ void read_input_binary(
 template <typename T>
 void read_input_binary(
   const std::fs::path& input_path,
-  const size_t batch_size,
   T* arr
 );
 
@@ -629,13 +628,15 @@ void read_input_binary(
                  arr + (i + 1) * num_features,
                  [](T v){ return v != 0;}
                );
-    rowsY[nerowsY++] = i;
+    if(rlenY[i] > 0) {
+      rowsY[nerowsY++] = i;
+    }
   }
 }
+
 template <typename T>
 void read_input_binary(
   const std::fs::path& input_path,
-  const size_t batch_size,
   T* arr
 ) {
   //T is either float or double type
