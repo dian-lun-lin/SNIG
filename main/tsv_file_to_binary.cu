@@ -1,5 +1,5 @@
 #include <CLI11/CLI11.hpp>
-#include <SparseDNN/utility/reader.hpp>
+#include <SNIG/utility/reader.hpp>
 
 
 int main(int argc, char* argv[]) {
@@ -75,7 +75,7 @@ int main(int argc, char* argv[]) {
 
   std::cout << "Transforming weight files...\n";
 
-  sparse_dnn::tsv_file_to_binary_file<float>(
+  snig::tsv_file_to_binary_file<float>(
     weight_path,
     num_layers,
     num_neurons_per_layer,
@@ -87,7 +87,7 @@ int main(int argc, char* argv[]) {
 
   std::cout << "Transforming input files...\n";
 
-  sparse_dnn::tsv_file_to_binary_file<float>(
+  snig::tsv_file_to_binary_file<float>(
     input_path,
     60000,
     num_neurons_per_layer
@@ -96,7 +96,7 @@ int main(int argc, char* argv[]) {
   std::cout << "Transforming golden files...\n";
 
   if(!golden_all){
-    sparse_dnn::tsv_file_to_binary_file<float>(
+    snig::tsv_file_to_binary_file<float>(
       golden_path,
       num_neurons_per_layer,
       num_layers,
@@ -105,7 +105,7 @@ int main(int argc, char* argv[]) {
   }
   else{
     for(int i = 120; i <= num_layers; i *= 4){
-      sparse_dnn::tsv_file_to_binary_file<float>(
+      snig::tsv_file_to_binary_file<float>(
         golden_path,
         num_neurons_per_layer,
         i,

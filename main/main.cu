@@ -1,7 +1,7 @@
 #include <CLI11/CLI11.hpp>
-#include <SparseDNN/SparseDNN_GPU.hpp>
-#include <SparseDNN/utility/reader.hpp>
-#include <SparseDNN/utility/scoring.hpp>
+#include <SNIG/SNIG_GPU.hpp>
+#include <SNIG/utility/reader.hpp>
+#include <SNIG/utility/scoring.hpp>
 #include <iostream>
 
 int main(int argc, char* argv[]) {
@@ -13,6 +13,7 @@ int main(int argc, char* argv[]) {
   //        --weight path of weight
   //        --bias(-b) bias
   //        --num_neurons_per_layer 1024, 4096, 16384, or 65536
+  //        --num_device 1, 2, 3, 4
   //        --num_layers num_layers 120, 480, or 1920
   //        --input_path path of input
   //        --golden_path path of golden
@@ -20,13 +21,15 @@ int main(int argc, char* argv[]) {
   //example1:  
   //        ./main_cu
   //example2:  
-  //        ./main_cu  -m GPU_cugraph --weight ../sample_data/weight/neuron1024/ --num_neurons_per_layer 1024 --num_layers 120 --input_path ../sample_data/MNIST/sparse-images-1024.b --golden_path ../sample_data/MNIST/neuron1024-l120-categories.b
+  //        ./main_cu  -m BF_one_gpu --weight ../sample_data/weight/neuron1024/ --num_neurons_per_layer 1024 --num_layers 120 --input_path ../sample_data/MNIST/sparse-images-1024.b --golden_path ../sample_data/MNIST/neuron1024-l120-categories.b
 
-  CLI::App app{"SparseDNN"};
-  std::string mode = "GPU_baseline";
-  app.add_option("-m, --mode", 
+  CLI::App app{"SNIG"};
+  std::string mode = "BF_one_gpu";
+  app.add_option(
+    "-m, --mode", 
     mode, 
-    "select mode(sequential/GPU), default is sequential");
+    "select mode(BF_one_gpu, BF_one_gpu_cudagraph, BF_multiple_gpus, SNIG_cudagraph, or SNIG_taskflow), default is bf_one_gpu"
+  );
 
   std::fs::path weight_path("../sample_data/weight/neuron1024/");
   app.add_option("-w, --weight", weight_path, "weight directory path")
@@ -37,6 +40,13 @@ int main(int argc, char* argv[]) {
     "--num_neurons_per_layer", 
     num_neurons_per_layer, 
     "total number of neurons per layer, default is 1024"
+  );
+
+  size_t num_dev = 1;
+  app.add_option(
+    "--num_device", 
+    num_dev,
+    "number of GPUs, default is 1"
   );
 
   size_t num_layers=120;
@@ -68,89 +78,54 @@ int main(int argc, char* argv[]) {
   std::cout << "Current mode: " << mode << std::endl;
 
   //binary format is not completed yet.
-  //if(mode == "GPU_cusparse") {
-    //sparse_dnn::GPUCusparse<float> GPU_cusparse(
-      //weight_path, 
-      //bias,
-      //num_neurons_per_layer, 
-      //num_layers
-    //);
-    //result = GPU_cusparse.infer(input_path, 60000);
-  //}
-  if(mode == "GPU_baseline") {
-    sparse_dnn::GPUBaseline<float> GPU_baseline(
+  if(mode == "BF_one_gpu") {
+    snig::BFOneGpu<float> bf_one(
       weight_path, 
       bias,
       num_neurons_per_layer, 
       num_layers
     );
-    result = GPU_baseline.infer(input_path, 60000);
+    result = bf_one.infer(input_path, 60000);
   }
-  if(mode == "GPU_baseline_multiple") {
-    sparse_dnn::GPUBaselineMulti<float> GPU_baseline_multi(
+
+  if(mode == "BF_one_gpu_cudagraph") {
+    snig::BFOneGpuCudaGraph<float> bf_one_cudagraph(
       weight_path, 
       bias,
       num_neurons_per_layer, 
       num_layers
     );
-    result = GPU_baseline_multi.infer(input_path, 60000, 1);
+    result = bf_one_cudagraph.infer(input_path, 60000);
   }
-  //else if(mode == "GPU_cugraph") {
-    //sparse_dnn::GPUCugraph<float> GPU_cugraph(
-      //weight_path, 
-      //bias,
-      //num_neurons_per_layer, 
-      //num_layers
-    //);
-    //result = GPU_cugraph.infer(input_path, 60000, true);
-  //}
-  else if(mode == "GPU_decompose") {
-    sparse_dnn::GPUDecomp<float> GPU_decompose(
+  if(mode == "BF_multiple_gpus") {
+    snig::BFMultiGpu<float> bf_multi(
       weight_path, 
       bias,
       num_neurons_per_layer, 
       num_layers
     );
-    result = GPU_decompose.infer(input_path, 60000, 5000, 4);
+    result = bf_multi.infer(input_path, 60000, num_dev);
   }
-  else if(mode == "GPU_taskflow") {
-    sparse_dnn::GPUTaskflow<float> GPU_taskflow(
+  else if(mode == "SNIG_cudagraph") {
+    snig::SNIGCudaGraph<float> snig_cudagraph(
       weight_path, 
       bias,
       num_neurons_per_layer, 
       num_layers
     );
-    result = GPU_taskflow.infer(input_path, 60000, 5000, 4);
+    result = snig_cudagraph.infer(input_path, 60000, 5000, 10, num_dev);
   }
-  else if(mode == "GPU_decompose_multiple") {
-    sparse_dnn::GPUDecompMulti<float> GPU_decomp_multi(
+  else if(mode == "SNIG_taskflow") {
+    snig::SNIGTaskflow<float> snig_taskflow(
       weight_path, 
       bias,
       num_neurons_per_layer, 
       num_layers
     );
-    result = GPU_decomp_multi.infer(input_path, 60000, 5000, 10, 4);
+    result = snig_taskflow.infer(input_path, 60000, 5000, 10, num_dev);
   }
-  else if(mode == "GPU_taskflow_multiple") {
-    sparse_dnn::GPUTaskflowMulti<float> GPU_taskflow_multi(
-      weight_path, 
-      bias,
-      num_neurons_per_layer, 
-      num_layers
-    );
-    result = GPU_taskflow_multi.infer(input_path, 60000, 5000, 10, 4);
-  }
-  else if(mode == "GPU_taskflow_add_ident") {
-    sparse_dnn::GPUTaskflowAddIdent<float> GPU_taskflow_add_ident(
-      weight_path, 
-      bias,
-      num_neurons_per_layer, 
-      num_layers
-    );
-    result = GPU_taskflow_add_ident.infer(input_path, 60000, 5000, 10, 4);
-  }
-  auto golden = sparse_dnn::read_golden_binary(golden_path);
-  if(sparse_dnn::is_passed(result, golden)) {
+  auto golden = snig::read_golden_binary(golden_path);
+  if(snig::is_passed(result, golden)) {
     std::cout << "CHALLENGE PASSED\n";
   }
   else{
