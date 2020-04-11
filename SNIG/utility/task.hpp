@@ -1,13 +1,13 @@
 #pragma once
 #include <Eigen/SparseCore>
-#include <SparseDNN/utility/matrix_operation.hpp>
-#include <SparseDNN/utility/matrix_format.h>
-#include <SparseDNN/utility/cuda_error.hpp>
+#include <SNIG/utility/matrix_operation.hpp>
+#include <SNIG/utility/matrix_format.h>
+#include <SNIG/utility/cuda_error.hpp>
 #include <cusparse_v2.h>
 #include <algorithm>
 #include <thrust/scan.h>
 
-namespace sparse_dnn{
+namespace snig{
 
 inline
 void cusparse_mutiplication(
@@ -41,7 +41,7 @@ void add_bias_relu_CPU(T* arr, T bias, int rows);
 
 template <typename T>
 __global__ 
-void baseline_inference(
+void bf_inference(
   const T* Y0,
   const size_t nerowsY,
   const int* rowsY0,
@@ -59,7 +59,7 @@ void baseline_inference(
 
 template <typename T>
 __global__ 
-void wo_host_inference(
+void bf_wo_host_inference(
   const T* Y0,
   const int* rowsY0,
   int* rlenY0,
@@ -74,25 +74,25 @@ void wo_host_inference(
   int* rlenY1
 );
 
-template <typename T>
-__global__ 
-void wo_host_inference_test(
-  const T* Y0,
-  const bool* rowsY0,
-  const size_t COL_BLK,
-  const size_t N_SLAB,
-  const size_t num_neurons_per_layer,
-  const int* roffW,
-  const int* colsW,
-  const T* valsW,
-  const T bias,
-  bool* rowsY1,
-  T* Y1
-);
+//template <typename T>
+//__global__ 
+//void wo_host_inference_test(
+  //const T* Y0,
+  //const bool* rowsY0,
+  //const size_t COL_BLK,
+  //const size_t N_SLAB,
+  //const size_t num_neurons_per_layer,
+  //const int* roffW,
+  //const int* colsW,
+  //const T* valsW,
+  //const T bias,
+  //bool* rowsY1,
+  //T* Y1
+//);
 
 template <typename T>
 __global__ 
-void wo_host_inference_test_2(
+void snig_inference(
   const T* Y0,
   const bool* rowsY0,
   const size_t COL_BLK,
@@ -410,7 +410,7 @@ void resize_CPU(CSRMatrix<T>& target, int rows) {
 
 template <typename T>
 __global__ 
-void baseline_inference(
+void bf_inference(
   const T* Y0,
   const size_t nerowsY,
   const int* rowsY0,
@@ -476,7 +476,7 @@ void baseline_inference(
 
 template <typename T>
 __global__ 
-void wo_host_inference(
+void bf_wo_host_inference(
   const T* Y0,
   const int* rowsY0,
   int* rlenY0,
@@ -538,75 +538,75 @@ void wo_host_inference(
 
 }
 
+//template <typename T>
+//__global__ 
+//void wo_host_inference_test(
+  //const T* Y0,
+  //const bool* rowsY0,
+  //const size_t COL_BLK,
+  //const size_t N_SLAB,
+  //const size_t num_neurons_per_layer,
+  //const int* roffW,
+  //const int* colsW,
+  //const T* valsW,
+  //const T bias,
+  //bool* rowsY1,
+  //T* Y1
+//) {
+
+  //if(!rowsY0[blockIdx.x]) {
+    ////memory reset here
+    ////avoid calling cudaMemset
+    //rowsY1[blockIdx.x] = false;
+    //return;
+  //}
+
+  //extern  __shared__ T shRow[];
+  //int tid = threadIdx.y * blockDim.x + threadIdx.x;
+  ////use 2 byte bool array to avoid synchronization
+  ////if is_nerow[1] = true, then rowsY1[bolckIdx.x] is true
+  ////rowsY1[blockIdx.x] will then be caculated at next iteration.
+  //__shared__ bool is_nerow[2];
+  //is_nerow[1] = false;
+
+  //for(size_t i = 0; i < N_SLAB; i++) {
+    //__syncthreads();
+    ////use stride to reset shRow effectively
+    //for(size_t j = tid; j < COL_BLK; j += blockDim.x * blockDim.y) {
+      //shRow[j] = 0;  
+    //}
+    //__syncthreads();
+    //for(size_t j = threadIdx.y; j < num_neurons_per_layer; j += blockDim.y) {
+      //T valY = Y0[blockIdx.x * num_neurons_per_layer + j];
+      //if(valY == 0) {
+        //continue;
+      //}
+      //int begOffW = roffW[i * num_neurons_per_layer + j] + threadIdx.x;
+      //int endOffW = roffW[i * num_neurons_per_layer + j + 1];
+      //for(int k = begOffW; k < endOffW; k += blockDim.x){
+        //int colW = colsW[k];
+        //T valW = valsW[k];
+        //atomicAdd(&shRow[colW - i * COL_BLK], valY * valW);
+      //}
+    //}
+    //__syncthreads();
+    //for(size_t j = 0; j < COL_BLK; j += blockDim.x * blockDim.y) {
+      //T v = j + tid < COL_BLK ? shRow[j + tid] + bias : -1;
+      //if(j + tid < COL_BLK) {
+        //Y1[blockIdx.x * num_neurons_per_layer + i * COL_BLK + j + tid] = min(T(32), max(T(0), v));
+        //is_nerow[v > 0] = true;
+      //}
+    //}
+  //}
+  //__syncthreads();
+  //if(tid == 0) {
+    //rowsY1[blockIdx.x] = is_nerow[1];
+  //}
+//}
+
 template <typename T>
 __global__ 
-void wo_host_inference_test(
-  const T* Y0,
-  const bool* rowsY0,
-  const size_t COL_BLK,
-  const size_t N_SLAB,
-  const size_t num_neurons_per_layer,
-  const int* roffW,
-  const int* colsW,
-  const T* valsW,
-  const T bias,
-  bool* rowsY1,
-  T* Y1
-) {
-
-  if(!rowsY0[blockIdx.x]) {
-    //memory reset here
-    //avoid calling cudaMemset
-    rowsY1[blockIdx.x] = false;
-    return;
-  }
-
-  extern  __shared__ T shRow[];
-  int tid = threadIdx.y * blockDim.x + threadIdx.x;
-  //use 2 byte bool array to avoid synchronization
-  //if is_nerow[1] = true, then rowsY1[bolckIdx.x] is true
-  //rowsY1[blockIdx.x] will then be caculated at next iteration.
-  __shared__ bool is_nerow[2];
-  is_nerow[1] = false;
-
-  for(size_t i = 0; i < N_SLAB; i++) {
-    __syncthreads();
-    //use stride to reset shRow effectively
-    for(size_t j = tid; j < COL_BLK; j += blockDim.x * blockDim.y) {
-      shRow[j] = 0;  
-    }
-    __syncthreads();
-    for(size_t j = threadIdx.y; j < num_neurons_per_layer; j += blockDim.y) {
-      T valY = Y0[blockIdx.x * num_neurons_per_layer + j];
-      if(valY == 0) {
-        continue;
-      }
-      int begOffW = roffW[i * num_neurons_per_layer + j] + threadIdx.x;
-      int endOffW = roffW[i * num_neurons_per_layer + j + 1];
-      for(int k = begOffW; k < endOffW; k += blockDim.x){
-        int colW = colsW[k];
-        T valW = valsW[k];
-        atomicAdd(&shRow[colW - i * COL_BLK], valY * valW);
-      }
-    }
-    __syncthreads();
-    for(size_t j = 0; j < COL_BLK; j += blockDim.x * blockDim.y) {
-      T v = j + tid < COL_BLK ? shRow[j + tid] + bias : -1;
-      if(j + tid < COL_BLK) {
-        Y1[blockIdx.x * num_neurons_per_layer + i * COL_BLK + j + tid] = min(T(32), max(T(0), v));
-        is_nerow[v > 0] = true;
-      }
-    }
-  }
-  __syncthreads();
-  if(tid == 0) {
-    rowsY1[blockIdx.x] = is_nerow[1];
-  }
-}
-
-template <typename T>
-__global__ 
-void wo_host_inference_test_2(
+void snig_inference(
   const T* Y0,
   const bool* rowsY0,
   const size_t COL_BLK,
@@ -697,4 +697,4 @@ void identify(
   }
 };
 
-}// end of namespace sparse_dnn ----------------------------------------------
+}// end of namespace snig ----------------------------------------------

@@ -1,9 +1,9 @@
 #pragma once
 #include <Eigen/SparseCore>
 #include <Eigen/Dense>
-#include <SparseDNN/utility/matrix_format.h>
+#include <SNIG/utility/matrix_format.h>
 
-namespace sparse_dnn {
+namespace snig {
 
 template<typename T>
 Eigen::Matrix<int, Eigen::Dynamic, 1> get_score(
@@ -92,4 +92,4 @@ bool is_passed(
   return (check == 0);
 }
 
-}// end of namespace sparse_dnn ----------------------------------------------
+}// end of namespace snig ----------------------------------------------

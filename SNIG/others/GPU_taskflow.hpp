@@ -5,7 +5,7 @@
 #include <SparseDNN/utility/matrix_format.h>
 #include <SparseDNN/utility/cuda_error.hpp>
 #include <SparseDNN/utility/scoring.hpp>
-#include <SparseDNN/parallel/task.hpp>
+#include <SparseDNN/utility/task.hpp>
 #include <chrono>
 
 namespace std {

@@ -1,5 +1,4 @@
 #pragma once
-
 #include <iostream>
 #include <numeric>
 #include <algorithm>
@@ -9,14 +8,14 @@
 #include <Eigen/Dense>
 #include <vector>
 #include <string>
-#include <SparseDNN/utility/matrix_format.h>
-#include <SparseDNN/utility/matrix_operation.hpp>
+#include <SNIG/utility/matrix_format.h>
+#include <SNIG/utility/matrix_operation.hpp>
 
 namespace std {
   namespace fs = experimental::filesystem;
 }
 
-namespace sparse_dnn {
+namespace snig {
 
 template <typename T>
 std::enable_if_t<std::is_same<T, float>::value, float> 
@@ -944,4 +943,4 @@ void tsv_file_to_binary_file(
   );
   
 }
-} // end of namespace sparse_dnn-----------------------------------------------
+} // end of namespace snig-----------------------------------------------

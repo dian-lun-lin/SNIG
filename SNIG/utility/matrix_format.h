@@ -1,6 +1,6 @@
 #pragma once
 
-namespace sparse_dnn{
+namespace snig{
 
   template<typename T>
   struct CSRMatrix{
@@ -41,6 +41,6 @@ namespace sparse_dnn{
 
   };
 
-}
+}// end of namespace snig ----------------------------------------------
 
 

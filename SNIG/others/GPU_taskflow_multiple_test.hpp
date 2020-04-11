@@ -4,9 +4,11 @@
 #include <SparseDNN/utility/matrix_format.h>
 #include <SparseDNN/utility/cuda_error.hpp>
 #include <SparseDNN/utility/scoring.hpp>
-#include <SparseDNN/parallel/task.hpp>
+#include <SparseDNN/utility/task.hpp>
 #include <chrono>
 #include <vector>
+#include <tuple>
+#include <thread>
 
 namespace std {
   namespace fs = experimental::filesystem;  
@@ -40,8 +42,9 @@ class GPUTaskflowMulti {
     size_t _pp_wlen;
     size_t _pp_wsize;
 
-    void _infer_taskflow(
-      T* h_Y,
+    void  _infer_taskflow(
+      T* source_Y,
+      bool* source_rowsY,
       std::vector<std::vector<T*> >& dev_Y,
       std::vector<std::vector<bool*> >& dev_rowsY,
       std::vector<std::vector<int*> >& dev_W,
@@ -208,6 +211,7 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUTaskflowMulti<T>::infer(
     }
     dev_W.push_back(W);
   }
+  cudaSetDevice(0);
 
   //input allocation
   size_t batch_ylen = batch_size * _num_neurons_per_layer;
@@ -215,35 +219,31 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUTaskflowMulti<T>::infer(
   size_t ylen = num_inputs * _num_neurons_per_layer;
   size_t ysize = ylen * sizeof(T);
 
-  T* h_Y;
-  checkCuda(cudaMallocHost(
-    (void**)&h_Y,
-    ysize
-  ));
+  T* source_Y;
+  bool* source_rowsY;
+  checkCuda(cudaMallocManaged(&source_Y, ysize));
+  checkCuda(cudaMallocManaged(&source_rowsY, sizeof(bool) * num_inputs));
+  checkCuda(cudaMemset(source_rowsY, 1, sizeof(bool) * num_inputs));
 
   std::vector<std::vector<T*> > dev_Y;
   std::vector<std::vector<bool*> > dev_rowsY;
   dev_Y.reserve(num_dev);
   dev_rowsY.reserve(num_dev);
 
-  std::vector<T*> Y(2, nullptr);
-  std::vector<bool*> rowsY(2, nullptr);
+  std::vector<T*> Y{2, nullptr};
+  std::vector<bool*> rowsY{2, nullptr};
   for(size_t dev = 0; dev < num_dev; ++dev) {
     cudaSetDevice(dev);
-    checkCuda(cudaMalloc(&Y[0], batch_ysize));
     checkCuda(cudaMalloc(&Y[1], batch_ysize));
-    checkCuda(cudaMalloc(&rowsY[0], sizeof(bool) * batch_size));
     checkCuda(cudaMalloc(&rowsY[1], sizeof(bool) * batch_size));
-    checkCuda(cudaMemset(Y[0], 0, batch_ysize));
     checkCuda(cudaMemset(Y[1], 0, batch_ysize));
-    checkCuda(cudaMemset(rowsY[0], 1, sizeof(bool) * batch_size));
     checkCuda(cudaMemset(rowsY[1], 0, sizeof(bool) * batch_size));
     dev_Y.push_back(Y);
     dev_rowsY.push_back(rowsY);
   }
   cudaSetDevice(0);
 
-  read_input_binary<T>(input_path, batch_size, h_Y);
+  read_input_binary<T>(input_path, batch_size, source_Y);
 
   auto pp_end = std::chrono::steady_clock::now();
   
@@ -255,7 +255,7 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUTaskflowMulti<T>::infer(
   std::cout << "Start inference............................" << std::flush;
   auto exec_beg = std::chrono::steady_clock::now();
 
-  _infer_taskflow(h_Y, dev_Y, dev_rowsY, dev_W, num_inputs, num_buff, num_dev, batch_size, batch_ylen, batch_ysize);
+  _infer_taskflow(source_Y, source_rowsY, dev_Y, dev_rowsY, dev_W, num_inputs, num_buff, num_dev, batch_size, batch_ylen, batch_ysize);
 
   auto exec_end = std::chrono::steady_clock::now();
   std::cout << "finished execution with "
@@ -266,7 +266,7 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUTaskflowMulti<T>::infer(
   std::cout << "Start scoring..............................." << std::flush;
   auto score_beg = std::chrono::steady_clock::now();
 
-  auto score = get_score<T>(h_Y, num_inputs, _num_neurons_per_layer);
+  auto score = get_score<T>(source_Y, num_inputs, _num_neurons_per_layer);
 
   auto score_end = std::chrono::steady_clock::now();
   std::cout << "finished scoring with "
@@ -274,7 +274,9 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUTaskflowMulti<T>::infer(
             << "ms"
             << std::endl;
 
-  checkCuda(cudaFreeHost(h_Y));
+  cudaSetDevice(0);
+  checkCuda(cudaFree(source_Y));
+  checkCuda(cudaFree(source_rowsY));
 
   for(auto& W_in_dev : dev_W) {
     for(auto& each_W : W_in_dev) {
@@ -282,14 +284,10 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUTaskflowMulti<T>::infer(
     }
   }
   for(auto& Y_in_dev : dev_Y) {
-    for(auto& each_Y : Y_in_dev) {
-      checkCuda(cudaFree(each_Y));
-    }
+      checkCuda(cudaFree(Y_in_dev[1]));
   }
   for(auto& rowsY_in_dev : dev_rowsY) {
-    for(auto& each_rowsY : rowsY_in_dev) {
-      checkCuda(cudaFree(each_rowsY));
-    }
+      checkCuda(cudaFree(rowsY_in_dev[1]));
   }
 
   return score;
@@ -297,7 +295,8 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUTaskflowMulti<T>::infer(
 
 template <typename T>
 void GPUTaskflowMulti<T>:: _infer_taskflow(
-  T* h_Y,
+  T* source_Y,
+  bool* source_rowsY,
   std::vector<std::vector<T*> >& dev_Y,
   std::vector<std::vector<bool*> >& dev_rowsY,
   std::vector<std::vector<int*> >& dev_W,
@@ -319,7 +318,6 @@ void GPUTaskflowMulti<T>:: _infer_taskflow(
 
   //beg_inputs indicate where to copy inputs for each GPU
   std::atomic<size_t> finished_inputs{0};
-  std::vector<T*> beg_inputs(num_dev);
 
   dim3 grid_dim(batch_size, 1, 1);
   dim3 block_dim(2, 512, 1);
@@ -330,16 +328,12 @@ void GPUTaskflowMulti<T>:: _infer_taskflow(
     first_fetchs.emplace_back(taskflow.emplace([&, dev](){
       cudaSetDevice(dev);
       int is_end = 1;
-      size_t batch = finished_inputs.fetch_add(batch_size);
-      beg_inputs[dev] = h_Y + batch * _num_neurons_per_layer;
-      if(batch < num_inputs) {
-        checkCuda(cudaMemcpy(
-          dev_Y[dev][0],
-          beg_inputs[dev],
-          batch_ysize,
-          cudaMemcpyHostToDevice
-          )
-        );
+      size_t beg_inputs = finished_inputs.fetch_add(batch_size);
+      if(beg_inputs < num_inputs) {
+        dev_Y[dev][0] = source_Y + beg_inputs * _num_neurons_per_layer;
+        dev_rowsY[dev][0] = source_rowsY + beg_inputs;
+        checkCuda(cudaMemPrefetchAsync(dev_Y[dev][0], batch_ysize, dev, NULL));
+        checkCuda(cudaMemPrefetchAsync(dev_rowsY[dev][0], sizeof(bool) * batch_size, dev, NULL));
         is_end = 0;
       }
       return is_end;
@@ -349,10 +343,8 @@ void GPUTaskflowMulti<T>:: _infer_taskflow(
       cf.device(dev);
       std::vector<tf::cudaTask> weight_copies;
       std::vector<tf::cudaTask> infers;
-      std::vector<tf::cudaTask> memsets;
       weight_copies.reserve(_num_layers);
       infers.reserve(_num_layers);
-      memsets.reserve(_num_layers);
 
       for(size_t cur_layer = 0; cur_layer < _num_layers; cur_layer += num_buff) {
         for(size_t k = 0; k < num_buff; ++k) {
@@ -361,7 +353,7 @@ void GPUTaskflowMulti<T>:: _infer_taskflow(
             dev_W[dev][k],
             _h_pinned_weight + (cur_layer + k) * _pp_wlen,
             _pp_wlen
-          ));
+          ).name("Weight_copy_H2D"));
 
           int* roffw = dev_W[dev][k];
           int* colsw = dev_W[dev][k] + _num_neurons_per_layer * _N_SLAB + 1;
@@ -382,50 +374,37 @@ void GPUTaskflowMulti<T>:: _infer_taskflow(
             _bias,
             dev_rowsY[dev][(k + 1) % 2],
             dev_Y[dev][(k + 1) % 2]
-          ));
-
-          memsets.emplace_back(cf.memset(dev_Y[dev][k % 2], 0, batch_ysize));
+          ).name("Kernel"));
         }
       }
-      tf::cudaTask result_copy = cf.copy(
-        beg_inputs[dev],
-        dev_Y[dev][0],
-        batch_ylen
-      );
 
       //dependencies of cudaflow
       for(size_t cur_layer = 0; cur_layer < _num_layers; ++cur_layer) {
         weight_copies[cur_layer].precede(infers[cur_layer]);
-        infers[cur_layer].precede(memsets[cur_layer]);
 
         if(cur_layer + num_buff < _num_layers) {
           infers[cur_layer].precede(weight_copies[cur_layer + num_buff]);
           weight_copies[cur_layer].precede(weight_copies[cur_layer + num_buff]);
         }
         if(cur_layer + 1 < _num_layers) {
-          memsets[cur_layer].precede(infers[cur_layer + 1]);
+          infers[cur_layer].precede(infers[cur_layer + 1]);
         }
       }
-      result_copy.succeed(infers[_num_layers - 1]);
     }).name("GPU"));
 
     fetchs.emplace_back(taskflow.emplace([&, dev](){
       cudaSetDevice(dev);
       int is_end = 1;
-      size_t batch = finished_inputs.fetch_add(batch_size);
-      beg_inputs[dev] = h_Y + batch * _num_neurons_per_layer;
-      if(batch < num_inputs) {
-        checkCuda(cudaMemcpy(
-          dev_Y[dev][0],
-          beg_inputs[dev],
-          batch_ysize,
-          cudaMemcpyHostToDevice
-        ));
-        checkCuda(cudaMemset(dev_rowsY[dev][0], 1, sizeof(bool) * batch_size));
+      size_t beg_inputs = finished_inputs.fetch_add(batch_size);
+      if(beg_inputs < num_inputs) {
+        dev_Y[dev][0] = source_Y + beg_inputs * _num_neurons_per_layer;
+        dev_rowsY[dev][0] = source_rowsY + beg_inputs;
+        checkCuda(cudaMemPrefetchAsync(dev_Y[dev][0], batch_ysize, dev, NULL));
+        checkCuda(cudaMemPrefetchAsync(dev_rowsY[dev][0], sizeof(bool) * batch_size, dev, NULL));
         is_end = 0;
       }
       return is_end;
-    }).name("fetch"));;
+    }).name("fetch"));
 
   }
 

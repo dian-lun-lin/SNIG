@@ -1,10 +1,11 @@
 #pragma once
 #include <Eigen/Dense>
-#include <SparseDNN/utility/matrix_format.h>
-#include <SparseDNN/utility/cuda_error.hpp>
-#include <SparseDNN/utility/scoring.hpp>
-#include <SparseDNN/utility/utility.hpp>
-#include <SparseDNN/parallel/task.hpp>
+#include <SNIG/utility/reader.hpp>
+#include <SNIG/utility/matrix_format.h>
+#include <SNIG/utility/cuda_error.hpp>
+#include <SNIG/utility/scoring.hpp>
+#include <SNIG/utility/utility.hpp>
+#include <SNIG/utility/task.hpp>
 #include <omp.h>
 #include <chrono>
 
@@ -12,10 +13,10 @@ namespace std {
   namespace fs = experimental::filesystem;  
 }
 
-namespace sparse_dnn{
+namespace snig{
 
 template <typename T>  
-class GPUBaselineMulti {
+class BFMultiGpu {
 
   static_assert(
     std::is_same<T, float>::value || std::is_same<T, double>::value,
@@ -52,14 +53,14 @@ class GPUBaselineMulti {
 
   public:
 
-    GPUBaselineMulti(
+    BFMultiGpu(
       const std::fs::path& weight_path,
       const T bias = -.3f,
       const size_t num_neurons_per_layer = 1024,
       const size_t num_layers = 120
     );
 
-    ~GPUBaselineMulti();
+    ~BFMultiGpu();
     
     size_t num_neurons_per_layer() const;
 
@@ -74,11 +75,11 @@ class GPUBaselineMulti {
 };
 
 // ----------------------------------------------------------------------------
-// Definition of GPUBaselineMulti
+// Definition of BFMultiGpu
 // ----------------------------------------------------------------------------
 
 template <typename T>
-GPUBaselineMulti<T>::GPUBaselineMulti(
+BFMultiGpu<T>::BFMultiGpu(
   const std::fs::path& weight_path,
   const T bias,
   const size_t num_neurons_per_layer,
@@ -166,22 +167,22 @@ GPUBaselineMulti<T>::GPUBaselineMulti(
 }
 
 template <typename T>
-GPUBaselineMulti<T>:: ~GPUBaselineMulti() {
+BFMultiGpu<T>:: ~BFMultiGpu() {
   checkCuda(cudaFreeHost(_h_pinned_weight));
 }
 
 template <typename T>
-size_t GPUBaselineMulti<T>::num_neurons_per_layer() const {
+size_t BFMultiGpu<T>::num_neurons_per_layer() const {
  return _num_neurons_per_layer; 
 }
 
 template <typename T>
-size_t GPUBaselineMulti<T>::num_layers() const { 
+size_t BFMultiGpu<T>::num_layers() const { 
   return _num_layers; 
 }
 
 template <typename T>
-Eigen::Matrix<int, Eigen::Dynamic, 1> GPUBaselineMulti<T>::infer(
+Eigen::Matrix<int, Eigen::Dynamic, 1> BFMultiGpu<T>::infer(
   const std::fs::path& input_path,
   const size_t num_inputs,
   const size_t num_dev
@@ -348,7 +349,7 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUBaselineMulti<T>::infer(
         handle_nerowsY = quotient;
       }
       
-      baseline_inference<T><<<handle_nerowsY, threads, sizeof(T) * _COL_BLK, dev_stream[dev][1]>>>(
+      bf_inference<T><<<handle_nerowsY, threads, sizeof(T) * _COL_BLK, dev_stream[dev][1]>>>(
         Y[cur_layer % 2],
         handle_nerowsY,
         rowsY[cur_layer % 2] + quotient * dev,
@@ -417,7 +418,7 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUBaselineMulti<T>::infer(
 }
 
 template <typename T>
-void GPUBaselineMulti<T>::_non_empty_rows(
+void BFMultiGpu<T>::_non_empty_rows(
   const size_t num_inputs,
   int* rlenY,
   int* rowsY,
@@ -432,7 +433,7 @@ void GPUBaselineMulti<T>::_non_empty_rows(
 }
 
 template <typename T>
-std::tuple<size_t, size_t> GPUBaselineMulti<T>::_partition(
+std::tuple<size_t, size_t> BFMultiGpu<T>::_partition(
   size_t nerowsY,
   size_t num_dev
 ) const {
@@ -441,4 +442,4 @@ std::tuple<size_t, size_t> GPUBaselineMulti<T>::_partition(
   return std::tie(quotient, remains);
 }
 
-}// end of namespace sparse_dnn ----------------------------------------------
+}// end of namespace snig ----------------------------------------------

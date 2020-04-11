@@ -1,12 +1,15 @@
 #pragma once
 #include <Eigen/Dense>
-#include <SparseDNN/utility/reader.hpp>
-#include <SparseDNN/utility/matrix_format.h>
-#include <SparseDNN/utility/cuda_error.hpp>
-#include <SparseDNN/utility/scoring.hpp>
-#include <SparseDNN/parallel/task.hpp>
+#include <taskflow/taskflow.hpp>
+#include <SNIG/utility/reader.hpp>
+#include <SNIG/utility/matrix_format.h>
+#include <SNIG/utility/cuda_error.hpp>
+#include <SNIG/utility/scoring.hpp>
+#include <SNIG/utility/task.hpp>
 #include <chrono>
 #include <vector>
+#include <queue>
+#include <mutex>
 #include <tuple>
 #include <thread>
 
@@ -14,11 +17,11 @@ namespace std {
   namespace fs = experimental::filesystem;  
 }
 
-namespace sparse_dnn{
+namespace snig{
 
 
 template <typename T>
-class GPUTaskflowMulti {
+class SNIGTaskflow {
 
   static_assert(
     std::is_same<T, float>::value || std::is_same<T, double>::value,
@@ -53,19 +56,20 @@ class GPUTaskflowMulti {
       const size_t num_dev,
       const size_t batch_size,
       const size_t batch_ylen,
-      const size_t batch_ysize
+      const size_t batch_ysize,
+      int* results
     ) const;
 
   public:
 
-    GPUTaskflowMulti(
+    SNIGTaskflow(
       const std::fs::path& weight_path,
       const T bias = -.3f,
       const size_t num_neurons_per_layer = 1024,
       const size_t num_layers = 120
     );
 
-    ~GPUTaskflowMulti();
+    ~SNIGTaskflow();
 
     size_t num_neurons_per_layer() const;
     size_t num_layers() const;
@@ -81,11 +85,11 @@ class GPUTaskflowMulti {
 };
 
 // ----------------------------------------------------------------------------
-// Definition of GPUTaskflowMulti
+// Definition of SNIGTaskflow
 // ----------------------------------------------------------------------------
 
 template <typename T>
-GPUTaskflowMulti<T>::GPUTaskflowMulti(
+SNIGTaskflow<T>::SNIGTaskflow(
   const std::fs::path& weight_path,
   const T bias,
   const size_t num_neurons_per_layer,
@@ -171,22 +175,22 @@ GPUTaskflowMulti<T>::GPUTaskflowMulti(
 }
 
 template <typename T>
-GPUTaskflowMulti<T>::~GPUTaskflowMulti() {
+SNIGTaskflow<T>::~SNIGTaskflow() {
   checkCuda(cudaFreeHost(_h_pinned_weight));
 }
 
 template <typename T>
-size_t GPUTaskflowMulti<T>::num_neurons_per_layer() const {
+size_t SNIGTaskflow<T>::num_neurons_per_layer() const {
    return _num_neurons_per_layer; 
 }
 
 template <typename T>
-size_t GPUTaskflowMulti<T>::num_layers() const { 
+size_t SNIGTaskflow<T>::num_layers() const { 
   return _num_layers; 
 }
 
 template <typename T>
-Eigen::Matrix<int, Eigen::Dynamic, 1> GPUTaskflowMulti<T>::infer(
+Eigen::Matrix<int, Eigen::Dynamic, 1> SNIGTaskflow<T>::infer(
   const std::fs::path& input_path,
   const size_t num_inputs,
   const size_t batch_size,
@@ -220,10 +224,13 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUTaskflowMulti<T>::infer(
   size_t ysize = ylen * sizeof(T);
 
   T* source_Y;
+  int* results;
   bool* source_rowsY;
   checkCuda(cudaMallocManaged(&source_Y, ysize));
+  checkCuda(cudaMallocManaged(&results, sizeof(int) * num_inputs));
   checkCuda(cudaMallocManaged(&source_rowsY, sizeof(bool) * num_inputs));
   checkCuda(cudaMemset(source_rowsY, 1, sizeof(bool) * num_inputs));
+  checkCuda(cudaMemset(results, 0, sizeof(int) * num_inputs));
 
   std::vector<std::vector<T*> > dev_Y;
   std::vector<std::vector<bool*> > dev_rowsY;
@@ -241,7 +248,6 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUTaskflowMulti<T>::infer(
     dev_Y.push_back(Y);
     dev_rowsY.push_back(rowsY);
   }
-  cudaSetDevice(0);
 
   read_input_binary<T>(input_path, batch_size, source_Y);
 
@@ -252,25 +258,14 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUTaskflowMulti<T>::infer(
             << "ms"
             << std::endl;
 
-  std::cout << "Start inference............................" << std::flush;
+  std::cout << "Start inferencing and Identifying categories......................." << std::flush;
   auto exec_beg = std::chrono::steady_clock::now();
 
-  _infer_taskflow(source_Y, source_rowsY, dev_Y, dev_rowsY, dev_W, num_inputs, num_buff, num_dev, batch_size, batch_ylen, batch_ysize);
+  _infer_taskflow(source_Y, source_rowsY, dev_Y, dev_rowsY, dev_W, num_inputs, num_buff, num_dev, batch_size, batch_ylen, batch_ysize, results);
 
   auto exec_end = std::chrono::steady_clock::now();
-  std::cout << "finished execution with "
+  std::cout << "finished execution and identification with "
             << std::chrono::duration_cast<std::chrono::milliseconds>(exec_end - exec_beg).count()
-            << "ms"
-            << std::endl;
-
-  std::cout << "Start scoring..............................." << std::flush;
-  auto score_beg = std::chrono::steady_clock::now();
-
-  auto score = get_score<T>(source_Y, num_inputs, _num_neurons_per_layer);
-
-  auto score_end = std::chrono::steady_clock::now();
-  std::cout << "finished scoring with "
-            << std::chrono::duration_cast<std::chrono::milliseconds>(score_end - score_beg).count()
             << "ms"
             << std::endl;
 
@@ -290,11 +285,11 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUTaskflowMulti<T>::infer(
       checkCuda(cudaFree(rowsY_in_dev[1]));
   }
 
-  return score;
+  return arr_to_Eigen_int(results, num_inputs);
 }
 
 template <typename T>
-void GPUTaskflowMulti<T>:: _infer_taskflow(
+void SNIGTaskflow<T>:: _infer_taskflow(
   T* source_Y,
   bool* source_rowsY,
   std::vector<std::vector<T*> >& dev_Y,
@@ -305,9 +300,10 @@ void GPUTaskflowMulti<T>:: _infer_taskflow(
   const size_t num_dev,
   const size_t batch_size,
   const size_t batch_ylen,
-  const size_t batch_ysize
+  const size_t batch_ysize,
+  int* results
 ) const {
-  tf::Taskflow taskflow("SparseDNN");
+  tf::Taskflow taskflow("SNIG");
   tf::Executor executor;
   std::vector<tf::Task> first_fetchs;
   std::vector<tf::Task> cudaflows;
@@ -316,8 +312,9 @@ void GPUTaskflowMulti<T>:: _infer_taskflow(
   cudaflows.reserve(num_dev);
   fetchs.reserve(num_dev);
 
-  //beg_inputs indicate where to copy inputs for each GPU
+  //dev_results indicate where to identify results to different categories
   std::atomic<size_t> finished_inputs{0};
+  std::vector<int*> dev_results(num_dev);
 
   dim3 grid_dim(batch_size, 1, 1);
   dim3 block_dim(2, 512, 1);
@@ -332,8 +329,10 @@ void GPUTaskflowMulti<T>:: _infer_taskflow(
       if(beg_inputs < num_inputs) {
         dev_Y[dev][0] = source_Y + beg_inputs * _num_neurons_per_layer;
         dev_rowsY[dev][0] = source_rowsY + beg_inputs;
+        dev_results[dev] = results + beg_inputs;
         checkCuda(cudaMemPrefetchAsync(dev_Y[dev][0], batch_ysize, dev, NULL));
         checkCuda(cudaMemPrefetchAsync(dev_rowsY[dev][0], sizeof(bool) * batch_size, dev, NULL));
+        checkCuda(cudaMemPrefetchAsync(dev_results[dev], sizeof(int) * batch_size, dev, NULL));
         is_end = 0;
       }
       return is_end;
@@ -362,7 +361,7 @@ void GPUTaskflowMulti<T>:: _infer_taskflow(
             grid_dim,
             block_dim,
             sizeof(T) * _COL_BLK,
-            wo_host_inference_test_2<T>,
+            snig_inference<T>,
             dev_Y[dev][k % 2],
             dev_rowsY[dev][k % 2],
             _COL_BLK,
@@ -374,9 +373,10 @@ void GPUTaskflowMulti<T>:: _infer_taskflow(
             _bias,
             dev_rowsY[dev][(k + 1) % 2],
             dev_Y[dev][(k + 1) % 2]
-          ).name("Kernel"));
+          ).name("Inference"));
         }
       }
+      tf::cudaTask ident = cf.kernel(16, 256, 0, identify<T>, dev_Y[dev][0], batch_size, _num_neurons_per_layer, dev_results[dev]);
 
       //dependencies of cudaflow
       for(size_t cur_layer = 0; cur_layer < _num_layers; ++cur_layer) {
@@ -390,6 +390,7 @@ void GPUTaskflowMulti<T>:: _infer_taskflow(
           infers[cur_layer].precede(infers[cur_layer + 1]);
         }
       }
+      infers[_num_layers - 1].precede(ident);
     }).name("GPU"));
 
     fetchs.emplace_back(taskflow.emplace([&, dev](){
@@ -399,8 +400,10 @@ void GPUTaskflowMulti<T>:: _infer_taskflow(
       if(beg_inputs < num_inputs) {
         dev_Y[dev][0] = source_Y + beg_inputs * _num_neurons_per_layer;
         dev_rowsY[dev][0] = source_rowsY + beg_inputs;
+        dev_results[dev] = results + beg_inputs;
         checkCuda(cudaMemPrefetchAsync(dev_Y[dev][0], batch_ysize, dev, NULL));
         checkCuda(cudaMemPrefetchAsync(dev_rowsY[dev][0], sizeof(bool) * batch_size, dev, NULL));
+        checkCuda(cudaMemPrefetchAsync(dev_results[dev], sizeof(int) * batch_size, dev, NULL));
         is_end = 0;
       }
       return is_end;
@@ -423,4 +426,5 @@ void GPUTaskflowMulti<T>:: _infer_taskflow(
   checkCuda(cudaSetDevice(0));
 }
 
-}// end of namespace sparse_dnn ----------------------------------------------
+
+}// end of namespace snig ----------------------------------------------

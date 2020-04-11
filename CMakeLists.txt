@@ -3,7 +3,7 @@ cmake_minimum_required (VERSION 3.9)
 MESSAGE(STATUS "CMAKE_ROOT: " ${CMAKE_ROOT})
 
 # Project name
-project(SparseDNN VERSION 1.0.0 LANGUAGES CXX)
+project(SNIG VERSION 1.0.0 LANGUAGES CXX)
 
 # Turn on the verbose
 set(CMAKE_VERBOSE_MAKEFILE ON)
@@ -12,12 +12,12 @@ set(CMAKE_VERBOSE_MAKEFILE ON)
 #not test yet
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "7.3")
-	  message(FATAL_ERROR "\n SparseDNN requires g++ at least v7.3")
+	  message(FATAL_ERROR "\n SNIG requires g++ at least v7.3")
   endif()
 ## clang++
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
   if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "6.0")
-	  message(FATAL_ERROR "\n SparseDNN requires clang++ at least v6.0")
+	  message(FATAL_ERROR "\n SNIG requires clang++ at least v6.0")
   endif() 
 endif()
 
@@ -153,8 +153,10 @@ set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS}" "-lineinfo -arch=sm_75 \ -gencode=arch=
 cuda_add_executable(main_cuda ${PROJECT_SOURCE_DIR}/main/main.cu)
 target_link_libraries(main_cuda stdc++fs cusparse OpenMP::OpenMP_CXX sparse_dnn::default_settings)
 
+cuda_add_executable(tsv_file_to_binary ${PROJECT_SOURCE_DIR}/main/tsv_file_to_binary.cu)
+target_link_libraries(tsv_file_to_binary ${PROJECT_NAME} stdc++fs sparse_dnn::default_settings)
+
+#CPU parallel. Not support yet.
 #add_executable(main ${PROJECT_SOURCE_DIR}/main/main.cpp)
 #target_link_libraries(main ${PROJECT_NAME} Threads::Threads stdc++fs sparse_dnn::default_settings)
 
-#cuda_add_executable(tsv_file_to_binary ${PROJECT_SOURCE_DIR}/main/tsv_file_to_binary.cu)
-#target_link_libraries(tsv_file_to_binary ${PROJECT_NAME} stdc++fs sparse_dnn::default_settings)

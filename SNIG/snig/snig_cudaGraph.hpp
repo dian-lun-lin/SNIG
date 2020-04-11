@@ -1,10 +1,10 @@
 #pragma once
 #include <Eigen/Dense>
-#include <SparseDNN/utility/reader.hpp>
-#include <SparseDNN/utility/matrix_format.h>
-#include <SparseDNN/utility/cuda_error.hpp>
-#include <SparseDNN/utility/scoring.hpp>
-#include <SparseDNN/parallel/task.hpp>
+#include <SNIG/utility/reader.hpp>
+#include <SNIG/utility/matrix_format.h>
+#include <SNIG/utility/cuda_error.hpp>
+#include <SNIG/utility/scoring.hpp>
+#include <SNIG/utility/task.hpp>
 #include <chrono>
 #include <vector>
 #include <tuple>
@@ -14,11 +14,11 @@ namespace std {
   namespace fs = experimental::filesystem;  
 }
 
-namespace sparse_dnn{
+namespace snig{
 
 
 template <typename T>
-class GPUDecompMulti {
+class SNIGCudaGraph {
 
   static_assert(
     std::is_same<T, float>::value || std::is_same<T, double>::value,
@@ -84,14 +84,14 @@ class GPUDecompMulti {
 
   public:
 
-    GPUDecompMulti(
+    SNIGCudaGraph(
       const std::fs::path& weight_path,
       const T bias = -.3f,
       const size_t num_neurons_per_layer = 1024,
       const size_t num_layers = 120
     );
 
-    ~GPUDecompMulti();
+    ~SNIGCudaGraph();
 
     size_t num_neurons_per_layer() const;
     size_t num_layers() const;
@@ -107,11 +107,11 @@ class GPUDecompMulti {
 };
 
 // ----------------------------------------------------------------------------
-// Definition of GPUDecompMulti
+// Definition of SNIGCudaGraph
 // ----------------------------------------------------------------------------
 
 template <typename T>
-GPUDecompMulti<T>::GPUDecompMulti(
+SNIGCudaGraph<T>::SNIGCudaGraph(
   const std::fs::path& weight_path,
   const T bias,
   const size_t num_neurons_per_layer,
@@ -197,22 +197,22 @@ GPUDecompMulti<T>::GPUDecompMulti(
 }
 
 template <typename T>
-GPUDecompMulti<T>::~GPUDecompMulti() {
+SNIGCudaGraph<T>::~SNIGCudaGraph() {
   checkCuda(cudaFreeHost(_h_pinned_weight));
 }
 
 template <typename T>
-size_t GPUDecompMulti<T>::num_neurons_per_layer() const {
+size_t SNIGCudaGraph<T>::num_neurons_per_layer() const {
    return _num_neurons_per_layer; 
 }
 
 template <typename T>
-size_t GPUDecompMulti<T>::num_layers() const { 
+size_t SNIGCudaGraph<T>::num_layers() const { 
   return _num_layers; 
 }
 
 template <typename T>
-Eigen::Matrix<int, Eigen::Dynamic, 1> GPUDecompMulti<T>::infer(
+Eigen::Matrix<int, Eigen::Dynamic, 1> SNIGCudaGraph<T>::infer(
   const std::fs::path& input_path,
   const size_t num_inputs,
   const size_t batch_size,
@@ -319,7 +319,7 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> GPUDecompMulti<T>::infer(
 }
 
 template <typename T>
-void GPUDecompMulti<T>::_infer_flatterned_graph(
+void SNIGCudaGraph<T>::_infer_flatterned_graph(
   T* source_Y,
   bool* source_rowsY,
   std::vector<std::vector<T*> >& dev_Y,
@@ -418,7 +418,7 @@ void GPUDecompMulti<T>::_infer_flatterned_graph(
 }
 
 template <typename T>
-  std::tuple<cudaGraph_t, std::vector<cudaGraphNode_t>, cudaKernelNodeParams> GPUDecompMulti<T>::_flatterned_graph_manual(
+  std::tuple<cudaGraph_t, std::vector<cudaGraphNode_t>, cudaKernelNodeParams> SNIGCudaGraph<T>::_flatterned_graph_manual(
   std::vector<T*>& Y,
   std::vector<bool*>& rowsY,
   std::vector<int*>& d_W,
@@ -458,7 +458,7 @@ template <typename T>
   w_memcpy_params.kind          = cudaMemcpyHostToDevice;
 
   //infer
-  infer_params.func           = (void*)wo_host_inference_test_2<T>;
+  infer_params.func           = (void*)snig_inference<T>;
   infer_params.gridDim        = dim3(batch_size, 1, 1);
   infer_params.blockDim       = threads;
   infer_params.sharedMemBytes = sizeof(T) * _COL_BLK;
@@ -536,7 +536,7 @@ template <typename T>
 }
 
 template <typename T>
-void GPUDecompMulti<T>::_set_graph_param(
+void SNIGCudaGraph<T>::_set_graph_param(
   const std::vector<int*>& d_W,
   const std::vector<T*>& Y,
   const std::vector<bool*>& rowsY,
@@ -569,7 +569,7 @@ void GPUDecompMulti<T>::_set_graph_param(
 }
 
 template <typename T>
-void GPUDecompMulti<T>::_graph_launch(
+void SNIGCudaGraph<T>::_graph_launch(
   const cudaGraphExec_t& exec,
   const cudaStream_t& stream_for_graph
 ) const {
@@ -577,4 +577,4 @@ void GPUDecompMulti<T>::_graph_launch(
   checkCuda(cudaStreamSynchronize(stream_for_graph));
 }
 
-}// end of namespace sparse_dnn ----------------------------------------------
+}// end of namespace snig ----------------------------------------------

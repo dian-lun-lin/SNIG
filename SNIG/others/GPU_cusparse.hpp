@@ -4,7 +4,7 @@
 #include <SparseDNN/utility/reader.hpp>
 #include <SparseDNN/utility/matrix_operation.hpp>
 #include <SparseDNN/utility/scoring.hpp>
-#include <SparseDNN/parallel/task.hpp>
+#include <SparseDNN/utility/task.hpp>
 #include <chrono>
 
 namespace std{

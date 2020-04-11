@@ -2,7 +2,7 @@
 #include <functional>
 #include <algorithm>
 
-namespace sparse_dnn {
+namespace snig {
 
 inline
 float average_zero_percent_in_non_empty_rows(
@@ -31,4 +31,4 @@ float average_zero_percent_in_non_empty_rows(
 
 };
 
-}// end of namespace sparse_dnn ----------------------------------------------
+}// end of namespace snig ----------------------------------------------

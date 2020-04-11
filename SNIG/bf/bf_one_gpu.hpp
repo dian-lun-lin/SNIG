@@ -1,20 +1,20 @@
 #pragma once
 #include <Eigen/Dense>
-#include <SparseDNN/utility/matrix_format.h>
-#include <SparseDNN/utility/cuda_error.hpp>
-#include <SparseDNN/utility/scoring.hpp>
-#include <SparseDNN/utility/utility.hpp>
-#include <SparseDNN/parallel/task.hpp>
+#include <SNIG/utility/reader.hpp>
+#include <SNIG/utility/matrix_format.h>
+#include <SNIG/utility/cuda_error.hpp>
+#include <SNIG/utility/scoring.hpp>
+#include <SNIG/utility/task.hpp>
 #include <chrono>
 
 namespace std {
   namespace fs = experimental::filesystem;  
 }
 
-namespace sparse_dnn{
+namespace snig{
 
 template <typename T>  
-class GPUBaseline {
+class BFOneGpu {
 
   static_assert(
     std::is_same<T, float>::value || std::is_same<T, double>::value,
@@ -46,14 +46,14 @@ class GPUBaseline {
 
   public:
 
-    GPUBaseline(
+    BFOneGpu(
       const std::fs::path& weight_path,
       const T bias = -.3f,
       const size_t num_neurons_per_layer = 1024,
       const size_t num_layers = 120
     );
 
-    ~GPUBaseline();
+    ~BFOneGpu();
     
     size_t num_neurons_per_layer() const;
 
@@ -67,11 +67,11 @@ class GPUBaseline {
 };
 
 // ----------------------------------------------------------------------------
-// Definition of GPUBaseline
+// Definition of BFOneGpu
 // ----------------------------------------------------------------------------
 
 template <typename T>
-GPUBaseline<T>::GPUBaseline(
+BFOneGpu<T>::BFOneGpu(
   const std::fs::path& weight_path,
   const T bias,
   const size_t num_neurons_per_layer,
@@ -159,22 +159,22 @@ GPUBaseline<T>::GPUBaseline(
 }
 
 template <typename T>
-GPUBaseline<T>:: ~GPUBaseline() {
+BFOneGpu<T>:: ~BFOneGpu() {
   checkCuda(cudaFreeHost(_h_pinned_weight));
 }
 
 template <typename T>
-size_t GPUBaseline<T>::num_neurons_per_layer() const {
+size_t BFOneGpu<T>::num_neurons_per_layer() const {
  return _num_neurons_per_layer; 
 }
 
 template <typename T>
-size_t GPUBaseline<T>::num_layers() const { 
+size_t BFOneGpu<T>::num_layers() const { 
   return _num_layers; 
 }
 
 template <typename T>
-Eigen::Matrix<int, Eigen::Dynamic, 1> GPUBaseline<T>::infer(
+Eigen::Matrix<int, Eigen::Dynamic, 1> BFOneGpu<T>::infer(
 const std::fs::path& input_path,
   const size_t num_inputs
 ) const {
@@ -257,7 +257,7 @@ const std::fs::path& input_path,
       stream[0]
     ));
 
-    baseline_inference<T><<<nerowsY, threads, sizeof(T) * _COL_BLK, stream[1]>>>(
+    bf_inference<T><<<nerowsY, threads, sizeof(T) * _COL_BLK, stream[1]>>>(
       Y[cur_layer % 2],
       nerowsY,
       rowsY[cur_layer % 2],
@@ -291,7 +291,7 @@ const std::fs::path& input_path,
     );
   }
 
-  baseline_inference<T><<<nerowsY, threads, sizeof(T) * _COL_BLK, stream[1]>>>(
+  bf_inference<T><<<nerowsY, threads, sizeof(T) * _COL_BLK, stream[1]>>>(
     Y[(_num_layers - 1) % 2],
     nerowsY,
     rowsY[(_num_layers - 1) % 2],
@@ -341,7 +341,7 @@ const std::fs::path& input_path,
 }
 
 template <typename T>
-void GPUBaseline<T>::_non_empty_rows(
+void BFOneGpu<T>::_non_empty_rows(
   const size_t num_inputs,
   int* rlenY,
   int* rowsY,
@@ -357,4 +357,4 @@ void GPUBaseline<T>::_non_empty_rows(
 }
 
 
-}// end of namespace sparse_dnn ----------------------------------------------
+}// end of namespace snig ----------------------------------------------

@@ -1,10 +1,10 @@
 #pragma once
 #include <Eigen/SparseCore>
 #include <vector>
-#include <SparseDNN/utility/matrix_format.h>
+#include <SNIG/utility/matrix_format.h>
 #include <Eigen/Dense>
 
-namespace sparse_dnn {
+namespace snig {
 
 template<typename T>
 std::vector<Eigen::SparseMatrix<T> > slice_by_row(
@@ -190,4 +190,4 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> arr_to_Eigen_int(
 };
 
 
-}// end of namespace sparse_dnn ----------------------------------------------
+}// end of namespace snig ----------------------------------------------
