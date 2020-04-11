@@ -1,4 +1,4 @@
-# SparseDNN Project
+# SNIG
 
 # How to Compile
 
