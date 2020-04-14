@@ -96,7 +96,7 @@ int main(int argc, char* argv[]) {
   std::cout << "Transforming golden files...\n";
 
   if(!golden_all){
-    snig::tsv_file_to_binary_file<float>(
+    snig::tsv_file_to_binary_file(
       golden_path,
       num_neurons_per_layer,
       num_layers,
@@ -105,7 +105,7 @@ int main(int argc, char* argv[]) {
   }
   else{
     for(int i = 120; i <= num_layers; i *= 4){
-      snig::tsv_file_to_binary_file<float>(
+      snig::tsv_file_to_binary_file(
         golden_path,
         num_neurons_per_layer,
         i,

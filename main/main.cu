@@ -35,7 +35,7 @@ int main(int argc, char* argv[]) {
   app.add_option("-w, --weight", weight_path, "weight directory path")
     ->check(CLI::ExistingDirectory);
 
-  size_t num_neurons_per_layer=1024;
+  size_t num_neurons_per_layer = 1024;
   app.add_option(
     "--num_neurons_per_layer", 
     num_neurons_per_layer, 
@@ -49,7 +49,7 @@ int main(int argc, char* argv[]) {
     "number of GPUs, default is 1"
   );
 
-  size_t num_layers=120;
+  size_t num_layers = 120;
   app.add_option(
       "--num_layers",
       num_layers, 
