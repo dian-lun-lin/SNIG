@@ -323,7 +323,6 @@ void SNIGTaskflow<T>:: _infer_taskflow(
   std::vector<tf::Task> first_fetchs;
   std::vector<tf::Task> cudaflows;
   std::vector<tf::Task> fetchs;
-  //T* h_Y = nullptr;
   first_fetchs.reserve(num_dev);
   cudaflows.reserve(num_dev);
   fetchs.reserve(num_dev);
@@ -336,9 +335,6 @@ void SNIGTaskflow<T>:: _infer_taskflow(
   dim3 block_dim(2, 512, 1);
 
   tf::Task start = taskflow.emplace([](){
-    //Eigen::initParallel();
-    //Eigen::setNbThreads(40);
-    //std::cerr << Eigen::nbThreads() << " ";
   }).name("start");
 
   for(size_t dev = 0; dev < num_dev; ++dev) {
@@ -430,31 +426,6 @@ void SNIGTaskflow<T>:: _infer_taskflow(
 
   }
 
-  //CPU fetch
-  //first_fetchs.emplace_back(taskflow.emplace([&](){
-    //int is_end = 1;
-    //size_t beg_inputs = finished_inputs.fetch_add(batch_size);
-    //if(beg_inputs < num_inputs) {
-      //h_Y = source_Y + beg_inputs * _num_neurons_per_layer;
-      //is_end = 0;
-    //}
-    //return is_end;
-  //}).name("first_fetch"));
-  //fetchs.emplace_back(taskflow.emplace([&](){
-    //int is_end = 1;
-    //size_t beg_inputs = finished_inputs.fetch_add(batch_size);
-    //if(beg_inputs < num_inputs) {
-      //h_Y = source_Y + beg_inputs * _num_neurons_per_layer;
-      //is_end = 0;
-    //}
-    //return is_end;
-  //}).name("fetch"));
-
-  //CPU work
-  //tf::Task cpu_work = taskflow.emplace([&](){
-    //_cpu_infer(h_Y, batch_size);
-  //}).name("cpu_work");
-
   tf::Task stop = taskflow.emplace([](){}).name("stop");
 
   //dependencies of taskflow
@@ -464,42 +435,10 @@ void SNIGTaskflow<T>:: _infer_taskflow(
     cudaflows[dev].precede(fetchs[dev]);
     fetchs[dev].precede(cudaflows[dev], stop);
   }
-  //start.precede(first_fetchs[num_dev]);
-  //first_fetchs[num_dev].precede(cpu_work, stop);
-  //cpu_work.precede(fetchs[num_dev]);
-  //fetchs[num_dev].precede(cpu_work, stop);
   
   executor.run(taskflow).wait();
 
   checkCuda(cudaSetDevice(0));
-}
-
-template<typename T>
-void SNIGTaskflow<T>::_cpu_infer(
-  T* beg_Y,
-  size_t batch_size
-) const {
-  //Eigen::Map<Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> > y(beg_Y, batch_size, _num_neurons_per_layer);
-  //Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> tmp(batch_size,_num_neurons_per_layer);
-  //int* roffw;
-  //int* colsw;
-  //T* valsw;
-  //for(size_t cur_layer = 0; cur_layer < _num_layers; ++cur_layer) {
-    //std::cerr << cur_layer << " ";
-    //roffw = _h_pinned_weight + (cur_layer) * _pp_wlen;
-    //colsw = roffw + _num_neurons_per_layer * _N_SLAB + 1;
-    //valsw = (T*)(roffw + _p_w_index_len);
-    //Eigen::Map<const Eigen::SparseMatrix<T, Eigen::RowMajor> > w(_num_neurons_per_layer, _num_neurons_per_layer, _max_nnz_per_layer, roffw, colsw, valsw);
-    //tmp = w * y;
-    //cur_layer == 0 ? tmp = y * w : tmp *= w;
-    //y +=  _bias;
-    //y = y.unaryExpr([] (T a) {
-     //if(a < 0) return T(0);
-     //else if(a > 32) return T(32);
-     //return a;
-     //});
-     //y * w;
-  //}
 }
 
 
