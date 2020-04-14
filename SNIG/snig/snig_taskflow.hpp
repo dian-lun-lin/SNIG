@@ -1,5 +1,6 @@
 #pragma once
 #include <Eigen/Dense>
+#include <Eigen/Core>
 #include <taskflow/taskflow.hpp>
 #include <SNIG/utility/reader.hpp>
 #include <SNIG/utility/matrix_format.h>
@@ -24,7 +25,7 @@ template <typename T>
 class SNIGTaskflow {
 
   static_assert(
-    std::is_same<T, float>::value || std::is_same<T, double>::value,
+    std::is_same<T, float>::value || std::is_same<T, double>::value || std::is_same<T, half>::value,
     "data type must be either float or double"
   );
   
@@ -58,6 +59,11 @@ class SNIGTaskflow {
       const size_t batch_ylen,
       const size_t batch_ysize,
       int* results
+    ) const;
+
+    void _cpu_infer(
+      T* beg_Y,
+      size_t batch_size
     ) const;
 
   public:
@@ -134,15 +140,23 @@ SNIGTaskflow<T>::SNIGTaskflow(
   // value index should consider sizeof(T)
   _p_w_index_len  = num_neurons_per_layer * _N_SLAB + _max_nnz_per_layer + 1;
 
-  //handle aligned (only deal with double and float)
-  if(_p_w_index_len % sizeof(T) != 0){
+  //handle aligned
+  if((sizeof(int) * _p_w_index_len) % sizeof(T) != 0) {
     ++_pad;
   }
 
   _pp_w_index_len = _p_w_index_len + _pad;
 
   //pad packed weight length
-  _pp_wlen = _pp_w_index_len + (sizeof(T) / sizeof(int)) * _max_nnz_per_layer;
+  //half is 2 byte
+  //max_nnz should be even, otherwis it needs to be padded
+  if(std::is_same<T, half>::value) {
+    _pp_wlen = _pp_w_index_len + int(0.5 * _max_nnz_per_layer);
+
+  }
+  else {
+    _pp_wlen = _pp_w_index_len + (sizeof(T) / sizeof(int)) * _max_nnz_per_layer;
+  }
   //pad packed weight size
   _pp_wsize = sizeof(int) * (_pp_w_index_len) + sizeof(T) * _max_nnz_per_layer;
   
@@ -166,6 +180,7 @@ SNIGTaskflow<T>::SNIGTaskflow(
     _pad,
     _h_pinned_weight
   );
+
 
   auto reading_end = std::chrono::steady_clock::now();
   std::cout << "finished reading DNN layers with " 
@@ -249,7 +264,7 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> SNIGTaskflow<T>::infer(
     dev_rowsY.push_back(rowsY);
   }
 
-  read_input_binary<T>(input_path, batch_size, source_Y);
+  read_input_binary<T>(input_path, source_Y);
 
   auto pp_end = std::chrono::steady_clock::now();
   
@@ -308,6 +323,7 @@ void SNIGTaskflow<T>:: _infer_taskflow(
   std::vector<tf::Task> first_fetchs;
   std::vector<tf::Task> cudaflows;
   std::vector<tf::Task> fetchs;
+  //T* h_Y = nullptr;
   first_fetchs.reserve(num_dev);
   cudaflows.reserve(num_dev);
   fetchs.reserve(num_dev);
@@ -316,10 +332,14 @@ void SNIGTaskflow<T>:: _infer_taskflow(
   std::atomic<size_t> finished_inputs{0};
   std::vector<int*> dev_results(num_dev);
 
-  dim3 grid_dim(batch_size, 1, 1);
+  dim3 grid_dim(batch_size, _N_SLAB, 1);
   dim3 block_dim(2, 512, 1);
 
-  tf::Task start = taskflow.emplace([](){}).name("start");
+  tf::Task start = taskflow.emplace([](){
+    //Eigen::initParallel();
+    //Eigen::setNbThreads(40);
+    //std::cerr << Eigen::nbThreads() << " ";
+  }).name("start");
 
   for(size_t dev = 0; dev < num_dev; ++dev) {
     first_fetchs.emplace_back(taskflow.emplace([&, dev](){
@@ -376,7 +396,7 @@ void SNIGTaskflow<T>:: _infer_taskflow(
           ).name("Inference"));
         }
       }
-      tf::cudaTask ident = cf.kernel(16, 256, 0, identify<T>, dev_Y[dev][0], batch_size, _num_neurons_per_layer, dev_results[dev]);
+      tf::cudaTask ident = cf.kernel(16, 512, 0, identify<T>, dev_Y[dev][0], batch_size, _num_neurons_per_layer, dev_results[dev]);
 
       //dependencies of cudaflow
       for(size_t cur_layer = 0; cur_layer < _num_layers; ++cur_layer) {
@@ -384,7 +404,6 @@ void SNIGTaskflow<T>:: _infer_taskflow(
 
         if(cur_layer + num_buff < _num_layers) {
           infers[cur_layer].precede(weight_copies[cur_layer + num_buff]);
-          weight_copies[cur_layer].precede(weight_copies[cur_layer + num_buff]);
         }
         if(cur_layer + 1 < _num_layers) {
           infers[cur_layer].precede(infers[cur_layer + 1]);
@@ -411,6 +430,31 @@ void SNIGTaskflow<T>:: _infer_taskflow(
 
   }
 
+  //CPU fetch
+  //first_fetchs.emplace_back(taskflow.emplace([&](){
+    //int is_end = 1;
+    //size_t beg_inputs = finished_inputs.fetch_add(batch_size);
+    //if(beg_inputs < num_inputs) {
+      //h_Y = source_Y + beg_inputs * _num_neurons_per_layer;
+      //is_end = 0;
+    //}
+    //return is_end;
+  //}).name("first_fetch"));
+  //fetchs.emplace_back(taskflow.emplace([&](){
+    //int is_end = 1;
+    //size_t beg_inputs = finished_inputs.fetch_add(batch_size);
+    //if(beg_inputs < num_inputs) {
+      //h_Y = source_Y + beg_inputs * _num_neurons_per_layer;
+      //is_end = 0;
+    //}
+    //return is_end;
+  //}).name("fetch"));
+
+  //CPU work
+  //tf::Task cpu_work = taskflow.emplace([&](){
+    //_cpu_infer(h_Y, batch_size);
+  //}).name("cpu_work");
+
   tf::Task stop = taskflow.emplace([](){}).name("stop");
 
   //dependencies of taskflow
@@ -420,10 +464,42 @@ void SNIGTaskflow<T>:: _infer_taskflow(
     cudaflows[dev].precede(fetchs[dev]);
     fetchs[dev].precede(cudaflows[dev], stop);
   }
+  //start.precede(first_fetchs[num_dev]);
+  //first_fetchs[num_dev].precede(cpu_work, stop);
+  //cpu_work.precede(fetchs[num_dev]);
+  //fetchs[num_dev].precede(cpu_work, stop);
   
   executor.run(taskflow).wait();
 
   checkCuda(cudaSetDevice(0));
+}
+
+template<typename T>
+void SNIGTaskflow<T>::_cpu_infer(
+  T* beg_Y,
+  size_t batch_size
+) const {
+  //Eigen::Map<Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> > y(beg_Y, batch_size, _num_neurons_per_layer);
+  //Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> tmp(batch_size,_num_neurons_per_layer);
+  //int* roffw;
+  //int* colsw;
+  //T* valsw;
+  //for(size_t cur_layer = 0; cur_layer < _num_layers; ++cur_layer) {
+    //std::cerr << cur_layer << " ";
+    //roffw = _h_pinned_weight + (cur_layer) * _pp_wlen;
+    //colsw = roffw + _num_neurons_per_layer * _N_SLAB + 1;
+    //valsw = (T*)(roffw + _p_w_index_len);
+    //Eigen::Map<const Eigen::SparseMatrix<T, Eigen::RowMajor> > w(_num_neurons_per_layer, _num_neurons_per_layer, _max_nnz_per_layer, roffw, colsw, valsw);
+    //tmp = w * y;
+    //cur_layer == 0 ? tmp = y * w : tmp *= w;
+    //y +=  _bias;
+    //y = y.unaryExpr([] (T a) {
+     //if(a < 0) return T(0);
+     //else if(a > 32) return T(32);
+     //return a;
+     //});
+     //y * w;
+  //}
 }
 
 

@@ -30,6 +30,12 @@ to_numeric(const std::string& str) {
 }
 
 template <typename T>
+std::enable_if_t<std::is_same<T, half>::value, half> 
+to_numeric(const std::string& str) {
+  return __float2half(std::stof(str));
+}
+
+template <typename T>
 Eigen::SparseMatrix<T> tsv_string_to_matrix(
   const std::string& s,
   const size_t rows,
@@ -232,7 +238,6 @@ void tsv_file_to_binary_file(
   const size_t cols
 );
 
-template <typename T>
 void tsv_file_to_binary_file(
   std::fs::path golden_path,
   const size_t num_features,
@@ -488,11 +493,19 @@ void read_weight_binary(
   const size_t pad,
   int* arr
 ) {
-  //T is either float or double type
+  //T is either float,double, or double type
   static_assert(
-    std::is_same<T, float>::value || std::is_same<T, double>::value,
-    "data type must be either float or double"
+    std::is_same<T, float>::value || std::is_same<T, double>::value || std::is_same<T, half>::value,
+    "data type must be either float, double, or half"
   );
+
+  size_t _pp_wlen{0};
+  if(std::is_same<T, half>::value) {
+    _pp_wlen = num_neurons_per_layer * N_SLAB + 1 + max_nnz_per_layer + int(0.5 * max_nnz_per_layer) + pad;
+  }
+  else {
+    _pp_wlen = num_neurons_per_layer * N_SLAB + 1 + max_nnz_per_layer + (sizeof(T) / sizeof(int)) * max_nnz_per_layer + pad;
+  }
 
   for(size_t i = 0; i < num_layers; ++i) {
     std::fs::path p = weight_dir;
@@ -502,14 +515,12 @@ void read_weight_binary(
 
     size_t rows;
     size_t nnz;
-    int* location = arr + i * (num_neurons_per_layer * N_SLAB + 1
-      + max_nnz_per_layer + (sizeof(T) / sizeof(int)) * max_nnz_per_layer + pad);
+    int* location = arr + i * _pp_wlen;
 
     in.read((char*)&rows, sizeof(size_t));
     in.read((char*)&nnz, sizeof(size_t));
     in.read((char*)location, sizeof(int) * (rows * N_SLAB + 1 + nnz) + sizeof(T) * nnz);
   }
-
 }
 
 template<typename T>
@@ -607,10 +618,10 @@ void read_input_binary(
   int* rowsY,
   size_t& nerowsY
 ) {
-  //T is either float or double type
+  //T is either float, half, or double type
   static_assert(
-    std::is_same<T, float>::value || std::is_same<T, double>::value,
-    "data type must be either float or double"
+    std::is_same<T, float>::value || std::is_same<T, double>::value || std::is_same<T, half>::value,
+    "data type must be either float, double, or half"
   );
 
   std::fs::path p = input_path;
@@ -639,10 +650,10 @@ void read_input_binary(
   const std::fs::path& input_path,
   T* arr
 ) {
-  //T is either float or double type
+  //T is either float, half, or double type
   static_assert(
-    std::is_same<T, float>::value || std::is_same<T, double>::value,
-    "data type must be either float or double"
+    std::is_same<T, float>::value || std::is_same<T, double>::value || std::is_same<T, half>::value,
+    "data type must be either float, double, or half"
   );
 
   std::fs::path p = input_path;
@@ -661,10 +672,10 @@ void read_input_binary(
   T* arr,
   bool* rowsY
 ) {
-  //T is either float or double type
+  //T is either float, half, or double type
   static_assert(
-    std::is_same<T, float>::value || std::is_same<T, double>::value,
-    "data type must be either float or double"
+    std::is_same<T, float>::value || std::is_same<T, double>::value || std::is_same<T, half>::value,
+    "data type must be either float, double, or half"
   );
 
   std::fs::path p = input_path;
@@ -802,10 +813,10 @@ void tsv_file_to_binary_file(
   const size_t N_SLAB,
   const size_t estimate_nnz
 ) {
-  //T is either float or double type
+  //T is either float, half, or double type
   static_assert(
-    std::is_same<T, float>::value || std::is_same<T, double>::value,
-    "data type must be either float or double"
+    std::is_same<T, float>::value || std::is_same<T, double>::value || std::is_same<T, half>::value,
+    "data type must be either float, double, or half"
   );
 
   std::vector<Triplet<T> > triplets;
@@ -829,8 +840,7 @@ void tsv_file_to_binary_file(
         tokens.push_back(std::move(token));
       }
       triplets.emplace_back(
-        std::stoi(tokens[0]) - 1 + 
-        rows * ((std::stoi(tokens[1]) - 1) / COL_BLK),
+        std::stoi(tokens[0]) - 1 + rows * ((std::stoi(tokens[1]) - 1) / COL_BLK),
         std::stoi(tokens[1]) - 1,
         to_numeric<T>(tokens[2])
       );
@@ -839,19 +849,19 @@ void tsv_file_to_binary_file(
     std::sort(triplets.begin(), triplets.end());
     size_t nnz = triplets.size();
 
-    int row_array[rows * N_SLAB + 1];
-    int col_array[nnz];
-    T data_array[nnz];
+    auto row_array = std::make_unique<int[]>(rows * N_SLAB + 1);
+    auto col_array = std::make_unique<int[]>(nnz);
+    auto data_array = std::make_unique<T[]>(nnz);
     
-    std::memset(row_array, 0, sizeof(int) * (rows * N_SLAB + 1));
+    std::memset(row_array.get(), 0, sizeof(int) * (rows * N_SLAB + 1));
     
     for(size_t j = 0 ; j < nnz; ++j) {
-      ++row_array[triplets[j].row + 1];
-      col_array[j] = triplets[j].col;
-      data_array[j] = triplets[j].value;
+      ++row_array.get()[triplets[j].row + 1];
+      col_array.get()[j] = triplets[j].col;
+      data_array.get()[j] = triplets[j].value;
     }
 
-    std::partial_sum(row_array, row_array + rows * N_SLAB + 1, row_array);
+    std::partial_sum(row_array.get(), row_array.get() + rows * N_SLAB + 1, row_array.get());
 
     std::fs::path output_file = weight_dir;
     output_file /= "n" + std::to_string(cols) + "-l"
@@ -860,9 +870,9 @@ void tsv_file_to_binary_file(
     std::ofstream out(output_file, std::ios::out | std::ios::binary);
     out.write((char*)&rows, sizeof(size_t));
     out.write((char*)&nnz, sizeof(size_t));
-    out.write((char*)row_array, sizeof(int) * (rows * N_SLAB + 1));
-    out.write((char*)col_array, sizeof(int) * (nnz));
-    out.write((char*)data_array, sizeof(T) * (nnz));
+    out.write((char*)row_array.get(), sizeof(int) * (rows * N_SLAB + 1));
+    out.write((char*)col_array.get(), sizeof(int) * (nnz));
+    out.write((char*)data_array.get(), sizeof(T) * (nnz));
   }
 
   
@@ -874,10 +884,10 @@ void tsv_file_to_binary_file(
   const size_t rows,
   const size_t cols
 ) {
-  //T is either float or double type
+  //T is either float, half, or double type
   static_assert(
-    std::is_same<T, float>::value || std::is_same<T, double>::value,
-    "data type must be either float or double"
+    std::is_same<T, float>::value || std::is_same<T, double>::value || std::is_same<T, half>::value,
+    "data type must be either float, double, or half"
   );
 
   input_path /= "sparse-images-" + std::to_string(cols) + ".tsv";
@@ -909,18 +919,13 @@ void tsv_file_to_binary_file(
   out.write((char*)data_array.get(), sizeof(T) * (rows * cols));
 }
 
-template <typename T>
+inline
 void tsv_file_to_binary_file(
   std::fs::path golden_path,
   const size_t num_features,
   const size_t num_layers,
   const size_t rows
 ) {
-  //T is either float or double type
-  static_assert(
-    std::is_same<T, float>::value || std::is_same<T, double>::value,
-    "data type must be either float or double"
-  );
 
   std::string line;
   golden_path /= "neuron" + std::to_string(num_features) + "-l" + std::to_string(num_layers) + "-categories.tsv";
