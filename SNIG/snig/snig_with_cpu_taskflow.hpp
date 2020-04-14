@@ -62,7 +62,9 @@ class SNIGTaskflow {
 
     void _cpu_infer(
       T* beg_Y,
-      size_t batch_size
+      size_t batch_size,
+      size_t num_inner_cpu,
+      int* results
     ) const;
 
   public:
@@ -319,17 +321,17 @@ void SNIGTaskflow<T>:: _infer_taskflow(
 ) const {
   tf::Taskflow taskflow("SNIG");
   tf::Executor executor;
-  size_t num_cpu = 100;
+  size_t num_cpu = 25;
+  size_t num_inner_cpu = 2;
   T* h_Y{nullptr};
 
   std::vector<tf::Task> first_fetchs;
   std::vector<tf::Task> cudaflows;
   std::vector<tf::Task> fetchs;
-  std::vector<tf::Task> cpu_workers;
+  
   first_fetchs.reserve(num_dev);
   cudaflows.reserve(num_dev);
   fetchs.reserve(num_dev);
-  cpu_workers.reserve(num_cpu);
 
   //dev_results indicate where to identify results to different categories
   std::atomic<size_t> finished_inputs{0};
@@ -338,10 +340,9 @@ void SNIGTaskflow<T>:: _infer_taskflow(
 
   dim3 block_dim(2, 512, 1);
 
-  tf::Task start = taskflow.emplace([](){
-    //Eigen::initParallel();
-    //Eigen::setNbThreads(40);
-    //std::cerr << Eigen::nbThreads() << " ";
+  tf::Task start = taskflow.emplace([&num_inner_cpu](){
+    Eigen::initParallel();
+    Eigen::setNbThreads(num_inner_cpu);
   }).name("start");
 
   for(size_t dev = 0; dev < num_dev; ++dev) {
@@ -448,50 +449,59 @@ void SNIGTaskflow<T>:: _infer_taskflow(
 
   }
 
-  //CPU fetch
-  //CPU fetch  1/10 batch_size, compared to GPU
-  size_t cpu_get_batch{0};
-  size_t cpu_batch_size = 200;
-  tf::Task cpu_first_fetch = taskflow.emplace([&](){
-    int is_end = 1;
-    size_t beg_inputs = finished_inputs.fetch_add(cpu_batch_size);
-    if(beg_inputs < num_inputs) {
-      size_t diff = num_inputs - beg_inputs;
-      if(diff >= batch_size) {
-        cpu_get_batch =  batch_size;
-      }
-      else {
-        cpu_get_batch = diff; 
-      }
-      h_Y = source_Y + beg_inputs * _num_neurons_per_layer;
-      is_end = 0;
-    }
-    return is_end;
-  }).name("cpu_first_fetch");
-  tf::Task cpu_fetch = taskflow.emplace([&](){
-    int is_end = 1;
-    size_t beg_inputs = finished_inputs.fetch_add(cpu_batch_size);
-    if(beg_inputs < num_inputs) {
-      size_t diff = num_inputs - beg_inputs;
-      if(diff >= batch_size) {
-        cpu_get_batch =  batch_size;
-      }
-      else {
-        cpu_get_batch = diff; 
-      }
-      h_Y = source_Y + beg_inputs * _num_neurons_per_layer;
-      is_end = 0;
-    }
-    return is_end;
-  }).name("cpu_fetch");
-  tf::Task cpu_assign = taskflow.emplace([](){});
-  tf::Task cpu_done = taskflow.emplace([](){});
+  std::vector<tf::Task> cpu_workers;
+  std::vector<tf::Task> cpu_first_fetchs;
+  std::vector<tf::Task> cpu_fetchs;
+  cpu_workers.reserve(num_cpu);
+  cpu_first_fetchs.reserve(num_cpu);
+  cpu_fetchs.reserve(num_cpu);
 
-  //CPU work
-  //mush be divisible
-  for(size_t cur_cpu = 0; cur_cpu < num_cpu; ++cur_cpu) {
+  std::vector<T*> cpu_Y(num_cpu, nullptr);
+  std::vector<int*> cpu_results(num_cpu, nullptr);
+  std::vector<size_t> cpu_get_batch(num_cpu, 0);
+
+  //CPU fetch  each CPU get 1/200 batch_size, compared to GPU
+  size_t cpu_batch_size = batch_size / 200;
+  for(size_t cpu = 0; cpu < num_cpu; ++cpu) {
+    //CPU first fetch
+    cpu_first_fetchs.emplace_back(taskflow.emplace([&](){
+      int is_end = 1;
+      size_t beg_inputs = finished_inputs.fetch_add(cpu_batch_size);
+      if(beg_inputs < num_inputs) {
+        size_t diff = num_inputs - beg_inputs;
+        if(diff >= cpu_batch_size) {
+          cpu_get_batch[cpu] =  cpu_batch_size;
+        }
+        else {
+          cpu_get_batch[cpu] = diff; 
+        }
+        cpu_Y[cpu] = source_Y + beg_inputs * _num_neurons_per_layer;
+        cpu_results[cpu] = results + beg_inputs;
+        is_end = 0;
+      }
+      return is_end;
+    }).name("cpu_first_fetch"));
+    //CPU fetch
+    cpu_fetchs.emplace_back(taskflow.emplace([&](){
+      int is_end = 1;
+      size_t beg_inputs = finished_inputs.fetch_add(cpu_batch_size);
+      if(beg_inputs < num_inputs) {
+        size_t diff = num_inputs - beg_inputs;
+        if(diff >= cpu_batch_size) {
+          cpu_get_batch[cpu] =  cpu_batch_size;
+        }
+        else {
+          cpu_get_batch[cpu] = diff; 
+        }
+        cpu_Y[cpu] = source_Y + beg_inputs * _num_neurons_per_layer;
+        cpu_results[cpu] = results + beg_inputs;
+        is_end = 0;
+      }
+      return is_end;
+    }).name("cpu_fetch"));
+    //CPU workers
     cpu_workers.emplace_back(taskflow.emplace([&](){
-      _cpu_infer(h_Y, cpu_get_batch / num_cpu);
+      _cpu_infer(cpu_Y[cpu], cpu_get_batch[cpu], num_inner_cpu, cpu_results[cpu]);
     }).name("cpu_work"));
   }
 
@@ -505,14 +515,12 @@ void SNIGTaskflow<T>:: _infer_taskflow(
     cudaflows[dev].precede(fetchs[dev]);
     fetchs[dev].precede(cudaflows[dev], stop);
   }
-  start.precede(cpu_first_fetch);
-  cpu_first_fetch.precede(cpu_assign, stop);
-  for(size_t cur_cpu = 0; cur_cpu < num_cpu; ++cur_cpu) {
-    cpu_assign.precede(cpu_workers[cur_cpu]);
-    cpu_workers[cur_cpu].precede(cpu_done);
+  for(size_t cpu = 0; cpu < num_cpu; ++cpu) {
+    start.precede(cpu_first_fetchs[cpu]);
+    cpu_first_fetchs[cpu].precede(cpu_workers[cpu], stop);
+    cpu_workers[cpu].precede(cpu_fetchs[cpu]);
+    cpu_fetchs[cpu].precede(cpu_workers[cpu], stop);
   }
-  cpu_done.precede(cpu_fetch);
-  cpu_fetch.precede(cpu_assign, stop);
   
   executor.run(taskflow).wait();
 
@@ -522,9 +530,13 @@ void SNIGTaskflow<T>:: _infer_taskflow(
 template<typename T>
 void SNIGTaskflow<T>::_cpu_infer(
   T* beg_Y,
-  size_t batch_size
+  size_t batch_size,
+  size_t num_inner_cpu,
+  int* results
 ) const {
-  Eigen::Map<Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> > y(beg_Y, batch_size, _num_neurons_per_layer);
+  //std::cerr << batch_size;
+  //auto beg = std::chrono::steady_clock::now();
+  Eigen::Map<Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::ColMajor>, Eigen::Aligned> y(beg_Y, _num_neurons_per_layer, batch_size);
   int* roffw;
   int* colsw;
   T* valsw;
@@ -532,14 +544,28 @@ void SNIGTaskflow<T>::_cpu_infer(
     roffw = _h_pinned_weight + (cur_layer) * _pp_wlen;
     colsw = roffw + _num_neurons_per_layer * _N_SLAB + 1;
     valsw = (T*)(roffw + _p_w_index_len);
-    Eigen::Map<const Eigen::SparseMatrix<T, Eigen::RowMajor> > w(_num_neurons_per_layer, _num_neurons_per_layer, _max_nnz_per_layer, roffw, colsw, valsw);
-    y = ((y * w).array() + _bias).matrix().unaryExpr([] (T a) {
-     if(a < 0) return T(0);
-     else if(a > 32) return T(32);
-     return a;
-     });
+    Eigen::Map<const Eigen::SparseMatrix<T, Eigen::RowMajor>, Eigen::Aligned> w(_num_neurons_per_layer, _num_neurons_per_layer, _max_nnz_per_layer, roffw, colsw, valsw);
+    //y = ((w * y).array() + _bias).matrix().unaryExpr([] (T a) {
+     //if(a < 0) return T(0);
+     //else if(a > 32) return T(32);
+     //return a;
+     //});
+    y = w * y;
+    #pragma omp parallel num_threads(num_inner_cpu) 
+    {
+    #pragma omp for
+    for(size_t i = 0; i < batch_size * _num_neurons_per_layer; ++i) {
+      beg_Y[i] += _bias;
+      beg_Y[i] = min(T(32), max(beg_Y[i], T(0)));
+    }
+    }
   }
-}
+  //auto end = std::chrono::steady_clock::now();
+  //std::cout << "finished caculate all layers with " 
+            //<< std::chrono::duration_cast<std::chrono::milliseconds>(end - beg).count()
+            //<< "ms"
+            //<< '\n';
 
+}
 
 }// end of namespace snig ----------------------------------------------
