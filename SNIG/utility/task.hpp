@@ -115,6 +115,7 @@ void identify(
   int* result_arr
 );
 
+
 //-----------------------------------------------------------------------------
 //Definition of task function
 //-----------------------------------------------------------------------------
@@ -491,6 +492,8 @@ void bf_wo_host_inference(
   int* rlenY1
 ) {
 
+  //to avoid calling host function
+  //gridDim is always equal to num_inputs
   if(rlenY0[blockIdx.x] == 0) {
     return;
   }
@@ -604,6 +607,79 @@ void bf_wo_host_inference(
   //}
 //}
 
+//template <typename T>
+//__global__ 
+//void snig_inference(
+  //const T* Y0,
+  //const bool* rowsY0,
+  //const size_t COL_BLK,
+  //const size_t N_SLAB,
+  //const size_t num_neurons_per_layer,
+  //const int* roffW,
+  //const int* colsW,
+  //const T* valsW,
+  //const T bias,
+  //bool* rowsY1,
+  //T* Y1
+//) {
+  //int tid = threadIdx.y * blockDim.x + threadIdx.x;
+  //if(!rowsY0[blockIdx.x]) {
+    ////memory reset here
+    ////avoid calling cudaMemset
+    //if(rowsY1[blockIdx.x]) {
+      //for(size_t j = tid; j < num_neurons_per_layer; j += blockDim.x * blockDim.y) {
+        //Y1[blockIdx.x * num_neurons_per_layer + j] = T(0);
+      //}
+      //__syncthreads();
+      //if(tid == 0) {
+        //rowsY1[blockIdx.x] = false;
+      //} 
+    //}
+    //return;
+  //}
+
+  //extern  __shared__ T shRow[];
+  ////use 2 byte bool array to avoid synchronization
+  ////if is_nerow[1] = true, then rowsY1[bolckIdx.x] is true
+  ////rowsY1[blockIdx.x] will then be caculated at next iteration.
+  //__shared__ bool is_nerow[2];
+  //is_nerow[1] = false;
+
+  ////use stride to reset shRow effectively
+  ////set shRow to bias directly
+  //for(size_t k = tid; k < COL_BLK; k += blockDim.x * blockDim.y) {
+    //shRow[k] = bias;  
+  //}
+
+  //for(size_t i = 0; i < N_SLAB; ++i) {
+    //__syncthreads();
+    //for(size_t j = threadIdx.y; j < num_neurons_per_layer; j += blockDim.y) {
+      //T valY = Y0[blockIdx.x * num_neurons_per_layer + j];
+      //if(valY == 0) {
+        //continue;
+      //}
+      //int begOffW = roffW[i * num_neurons_per_layer + j] + threadIdx.x;
+      //int endOffW = roffW[i * num_neurons_per_layer + j + 1];
+      //for(int k = begOffW; k < endOffW; k += blockDim.x) {
+        //int colW = colsW[k];
+        //T valW = valsW[k];
+        //atomicAdd(&shRow[colW - i * COL_BLK], valY * valW);
+      //}
+    //}
+    //__syncthreads();
+    //for(size_t j = tid; j < COL_BLK; j += blockDim.x * blockDim.y) {
+      ////use j = tid directly
+      //Y1[blockIdx.x * num_neurons_per_layer + i * COL_BLK + j] = min(T(32), max(T(0), shRow[j]));
+      //is_nerow[shRow[j] > T(0)] = true;
+      ////reset shRow here to avoid calling for loop again
+      //shRow[j] = bias;  
+    //}
+  //}
+  ////each thread would set its own is_nerow[1]
+  ////no need to syncthreads here
+  //rowsY1[blockIdx.x] = is_nerow[1];
+//}
+
 template <typename T>
 __global__ 
 void snig_inference(
@@ -623,56 +699,66 @@ void snig_inference(
   if(!rowsY0[blockIdx.x]) {
     //memory reset here
     //avoid calling cudaMemset
+    // threads in the first two ifs are in the same warp
+    //Hence it doesn't effect performance
     if(rowsY1[blockIdx.x]) {
-      for(size_t j = tid; j < num_neurons_per_layer; j += blockDim.x * blockDim.y) {
-        Y1[blockIdx.x * num_neurons_per_layer + j] = T(0);
+      if(blockIdx.y == 0) {
+        for(size_t j = tid; j < num_neurons_per_layer; j += blockDim.x * blockDim.y) {
+          Y1[blockIdx.x * num_neurons_per_layer + j] = T(0);
+        }
+        __syncthreads();
+        if(tid == 0) {
+          rowsY1[blockIdx.x] = false;
+        } 
       }
-      __syncthreads();
-      if(tid == 0) {
-        rowsY1[blockIdx.x] = false;
-      } 
     }
     return;
   }
 
-  extern  __shared__ T shRow[];
+  extern __shared__ T shRow[];
   //use 2 byte bool array to avoid synchronization
   //if is_nerow[1] = true, then rowsY1[bolckIdx.x] is true
   //rowsY1[blockIdx.x] will then be caculated at next iteration.
   __shared__ bool is_nerow[2];
-  is_nerow[1] = false;
+  if(tid == 0) {
+    is_nerow[1] = false;
+    if(blockIdx.y == 0) {
+      rowsY1[blockIdx.x] = false;
+    }
+  }
 
-  for(size_t i = 0; i < N_SLAB; ++i) {
-    //use stride to reset shRow effectively
-    for(size_t k = tid; k < COL_BLK; k += blockDim.x * blockDim.y) {
-      shRow[k] = 0;  
-    }
-    __syncthreads();
-    for(size_t j = threadIdx.y; j < num_neurons_per_layer; j += blockDim.y) {
-      T valY = Y0[blockIdx.x * num_neurons_per_layer + j];
-      if(valY == 0) {
-        continue;
-      }
-      int begOffW = roffW[i * num_neurons_per_layer + j] + threadIdx.x;
-      int endOffW = roffW[i * num_neurons_per_layer + j + 1];
-      for(int k = begOffW; k < endOffW; k += blockDim.x){
-        int colW = colsW[k];
-        T valW = valsW[k];
-        atomicAdd(&shRow[colW - i * COL_BLK], valY * valW);
-      }
-    }
-    __syncthreads();
-    for(size_t j = tid; j < COL_BLK; j += blockDim.x * blockDim.y) {
-      //use j = tid directly
-      T v = shRow[j] + bias;
-      Y1[blockIdx.x * num_neurons_per_layer + i * COL_BLK + j] = min(T(32), max(T(0), v));
-      is_nerow[v > 0] = true;
-    }
-    //because shRow reseting occurs in the same thread, syncthreads() is meaningless here
+  //use stride to reset shRow effectively
+  //set shRow to bias directly
+  //divide N_SLAB to blockIdx.y
+  for(size_t k = tid; k < COL_BLK; k += blockDim.x * blockDim.y) {
+    shRow[k] = bias;  
   }
   __syncthreads();
-  if(tid == 0) {
-    rowsY1[blockIdx.x] = is_nerow[1];
+
+  for(size_t j = threadIdx.y; j < num_neurons_per_layer; j += blockDim.y) {
+    T valY = Y0[blockIdx.x * num_neurons_per_layer + j];
+    if(valY == T(0)) {
+      continue;
+    }
+    int begOffW = roffW[blockIdx.y * num_neurons_per_layer + j] + threadIdx.x;
+    int endOffW = roffW[blockIdx.y * num_neurons_per_layer + j + 1];
+    for(int k = begOffW; k < endOffW; k += blockDim.x) {
+      int colW = colsW[k];
+      T valW = valsW[k];
+      atomicAdd(&shRow[colW - blockIdx.y * COL_BLK], valY * valW);
+    }
+  }
+  __syncthreads();
+  for(size_t j = tid; j < COL_BLK; j += blockDim.x * blockDim.y) {
+    //use j = tid directly
+    T v = shRow[j] > T(0) ? shRow[j] : T(0);
+    v = v < T(32) ? v : T(32);
+    Y1[blockIdx.x * num_neurons_per_layer + blockIdx.y * COL_BLK + j] = v;
+    is_nerow[v > T(0)] = true;
+  }
+  //avoid gridDim.y racing
+  if(is_nerow[1]) {
+    rowsY1[blockIdx.x] = true;
   }
 }
 
@@ -693,7 +779,7 @@ void identify(
       0,
       thrust::plus<T>()
     );
-    result_arr[i] = sum > 0 ? 1 : 0;
+    result_arr[i] = sum > T(0) ? 1 : 0;
   }
 };
 
