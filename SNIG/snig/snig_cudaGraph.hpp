@@ -459,7 +459,7 @@ template <typename T>
 
   //infer
   infer_params.func           = (void*)snig_inference<T>;
-  infer_params.gridDim        = dim3(batch_size, 1, 1);
+  infer_params.gridDim        = dim3(batch_size, _N_SLAB, 1);
   infer_params.blockDim       = threads;
   infer_params.sharedMemBytes = sizeof(T) * _COL_BLK;
   infer_params.extra          = NULL;
