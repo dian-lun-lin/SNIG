@@ -697,15 +697,11 @@ void snig_inference(
 ) {
   int tid = threadIdx.y * blockDim.x + threadIdx.x;
 
-  __shared__ bool is_all_empty;
-  if(tid == 0) {
-    is_all_empty = true;
-  }
-  __syncthreads();
-  for(size_t k = tid; k < N_SLAB; k += blockDim.x * blockDim.y) {
+  //N_SLAB is small enough to compute by each single thread
+  bool is_all_empty = true;
+  for(size_t k = 0; k < N_SLAB; ++k) {
     is_all_empty &= !rowsY0[blockIdx.x * N_SLAB + k];
   }
-  __syncthreads();
 
   if(is_all_empty) {
     //memory reset here
