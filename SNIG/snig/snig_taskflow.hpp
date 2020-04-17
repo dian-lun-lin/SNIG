@@ -61,11 +61,6 @@ class SNIGTaskflow {
       int* results
     ) const;
 
-    void _cpu_infer(
-      T* beg_Y,
-      size_t batch_size
-    ) const;
-
   public:
 
     SNIGTaskflow(
@@ -243,8 +238,8 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> SNIGTaskflow<T>::infer(
   bool* source_rowsY;
   checkCuda(cudaMallocManaged(&source_Y, ysize));
   checkCuda(cudaMallocManaged(&results, sizeof(int) * num_inputs));
-  checkCuda(cudaMallocManaged(&source_rowsY, sizeof(bool) * num_inputs));
-  checkCuda(cudaMemset(source_rowsY, 1, sizeof(bool) * num_inputs));
+  checkCuda(cudaMallocManaged(&source_rowsY, sizeof(bool) * num_inputs * _N_SLAB));
+  checkCuda(cudaMemset(source_rowsY, 1, sizeof(bool) * num_inputs * _N_SLAB));
   checkCuda(cudaMemset(results, 0, sizeof(int) * num_inputs));
 
   std::vector<std::vector<T*> > dev_Y;
@@ -257,9 +252,9 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> SNIGTaskflow<T>::infer(
   for(size_t dev = 0; dev < num_dev; ++dev) {
     cudaSetDevice(dev);
     checkCuda(cudaMalloc(&Y[1], batch_ysize));
-    checkCuda(cudaMalloc(&rowsY[1], sizeof(bool) * batch_size));
+    checkCuda(cudaMalloc(&rowsY[1], sizeof(bool) * batch_size * _N_SLAB));
     checkCuda(cudaMemset(Y[1], 0, batch_ysize));
-    checkCuda(cudaMemset(rowsY[1], 0, sizeof(bool) * batch_size));
+    checkCuda(cudaMemset(rowsY[1], 0, sizeof(bool) * batch_size * _N_SLAB));
     dev_Y.push_back(Y);
     dev_rowsY.push_back(rowsY);
   }
@@ -344,10 +339,10 @@ void SNIGTaskflow<T>:: _infer_taskflow(
       size_t beg_inputs = finished_inputs.fetch_add(batch_size);
       if(beg_inputs < num_inputs) {
         dev_Y[dev][0] = source_Y + beg_inputs * _num_neurons_per_layer;
-        dev_rowsY[dev][0] = source_rowsY + beg_inputs;
+        dev_rowsY[dev][0] = source_rowsY + beg_inputs * _N_SLAB;
         dev_results[dev] = results + beg_inputs;
         checkCuda(cudaMemPrefetchAsync(dev_Y[dev][0], batch_ysize, dev, NULL));
-        checkCuda(cudaMemPrefetchAsync(dev_rowsY[dev][0], sizeof(bool) * batch_size, dev, NULL));
+        checkCuda(cudaMemPrefetchAsync(dev_rowsY[dev][0], sizeof(bool) * batch_size * _N_SLAB, dev, NULL));
         checkCuda(cudaMemPrefetchAsync(dev_results[dev], sizeof(int) * batch_size, dev, NULL));
         is_end = 0;
       }
@@ -414,10 +409,10 @@ void SNIGTaskflow<T>:: _infer_taskflow(
       size_t beg_inputs = finished_inputs.fetch_add(batch_size);
       if(beg_inputs < num_inputs) {
         dev_Y[dev][0] = source_Y + beg_inputs * _num_neurons_per_layer;
-        dev_rowsY[dev][0] = source_rowsY + beg_inputs;
+        dev_rowsY[dev][0] = source_rowsY + beg_inputs * _N_SLAB;
         dev_results[dev] = results + beg_inputs;
         checkCuda(cudaMemPrefetchAsync(dev_Y[dev][0], batch_ysize, dev, NULL));
-        checkCuda(cudaMemPrefetchAsync(dev_rowsY[dev][0], sizeof(bool) * batch_size, dev, NULL));
+        checkCuda(cudaMemPrefetchAsync(dev_rowsY[dev][0], sizeof(bool) * batch_size * _N_SLAB, dev, NULL));
         checkCuda(cudaMemPrefetchAsync(dev_results[dev], sizeof(int) * batch_size, dev, NULL));
         is_end = 0;
       }
