@@ -64,14 +64,14 @@ int main(int argc, char* argv[]) {
   app.add_option(
       "--input",
       input_path, 
-      "input binary file path, default is 1024"
+      "input binary file path, default is ../sample_data/MNIST/sparse-images-1024.b"
   );
 
   std::fs::path golden_path("../sample_data/MNIST/neuron1024-l120-categories.b");
   app.add_option(
       "--golden",
       golden_path, 
-      "golden binary file path, default is 1024/120"
+      "golden binary file path, default is ../sample_data/MINIST/neuron1024-l120-categories.b"
   );
   CLI11_PARSE(app, argc, argv);
   Eigen::Matrix<int, Eigen::Dynamic, 1> result;
