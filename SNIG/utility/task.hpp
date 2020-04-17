@@ -701,6 +701,7 @@ void snig_inference(
   if(tid == 0) {
     is_all_empty = true;
   }
+  __syncthreads();
   for(size_t k = tid; k < N_SLAB; k += blockDim.x * blockDim.y) {
     is_all_empty &= !rowsY0[blockIdx.x * N_SLAB + k];
   }
@@ -771,7 +772,10 @@ void snig_inference(
   //if no one set is_non_emtpy[1] to true
   //it means this row is empty
   //set rowsY1[this row] = false then
-  rowsY1[blockIdx.x * N_SLAB + blockIdx.y] = !is_empty[1];
+  __syncthreads();
+  if(tid == 0) {
+    rowsY1[blockIdx.x * N_SLAB + blockIdx.y] = !is_empty[1];
+  }
 }
 
 template<typename T>
@@ -791,7 +795,6 @@ void identify(
       0,
       thrust::plus<T>()
     );
-    printf("%i ", sum);
     result_arr[i] = sum > 0 ? 1 : 0;
   }
 };

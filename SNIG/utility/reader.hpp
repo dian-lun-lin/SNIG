@@ -984,16 +984,22 @@ void diagonal_to_binary_file(
   const size_t COL_BLK,
   const size_t N_SLAB
 ) {
+  size_t nnz = std::min(rows, cols);
   for(size_t i = 0; i < num_layers; ++i) {
-    size_t nnz = cols;
 
     auto row_array = std::make_unique<int[]>(rows * N_SLAB + 1);
     auto col_array = std::make_unique<int[]>(nnz);
     auto data_array = std::make_unique<T[]>(nnz);
       
-    std::iota(row_array.get(), row_array.get() + rows * N_SLAB + 1, 0);
     std::iota(col_array.get(), col_array.get() + nnz, 0);
-    std::fill(data_array.get(), data_array.get() + nnz, 100);
+    std::fill(data_array.get(), data_array.get() + nnz, T(30));
+    std::memset(row_array.get(), 0, sizeof(int) * (rows * N_SLAB + 1));
+
+    for(size_t k = 0; k < nnz; ++k) {
+      ++row_array.get()[k + rows * (k / COL_BLK) + 1];
+    }
+
+    std::partial_sum(row_array.get(), row_array.get() + rows * N_SLAB + 1, row_array.get());
 
     std::fs::path output_file = weight_dir;
     output_file /= "n" + std::to_string(cols) + "-l"
@@ -1025,7 +1031,7 @@ void diagonal_to_binary_file(
 
   size_t min_diagonal = std::min(rows, cols);
   for(size_t i = 0; i < min_diagonal; ++i) {
-    *(data_array.get() + i * cols + i) = T(100);
+    *(data_array.get() + i * cols + i) = T(2);
   }
 
   std::fs::path p = input_path;
