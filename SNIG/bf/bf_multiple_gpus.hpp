@@ -46,6 +46,18 @@ class BFMultiGpu {
       size_t& nnz
     ) const;
 
+    void _infer_BF(
+      std::vector<std::vector<int*> >& dev_W,
+      std::vector<std::vector<int*> >& dev_rowsY,
+      std::vector<std::vector<int*> >& dev_rlenY,
+      std::vector<std::vector<T*> >& dev_Y,
+      std::vector<size_t>& dev_nerowsY,
+      size_t num_dev,
+      size_t each_partition,
+      size_t remains,
+      int* results
+    ) const;
+
   public:
 
     BFMultiGpu(
@@ -236,6 +248,10 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> BFMultiGpu<T>::infer(
 
   read_input_binary<T>(input_path, Y[0]);
 
+  //final results allocation
+  int* results;
+  checkCuda(cudaMallocManaged(&results, sizeof(int) * num_inputs));
+
   //partition
   //assume all rows of inputs are non-empty.
   size_t each_partition = num_inputs / num_dev;
@@ -322,29 +338,67 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> BFMultiGpu<T>::infer(
   }
 
   auto pp_end = std::chrono::steady_clock::now();
-  
+
   std::cout << "finished preprocessing with " 
             << std::chrono::duration_cast<std::chrono::milliseconds>(pp_end - pp_beg).count()
             << "ms"
             << std::endl;
-  int dim_y{0};
-  if(_num_neurons_per_layer == 1024) {
-    dim_y = 16;
-  }
-  else if(_num_neurons_per_layer == 4096) {
-    dim_y = 32;
-  }
-  else if(_num_neurons_per_layer == 16384) {
-    dim_y = 64;
-  }
-  else if(_num_neurons_per_layer == 65536) {
-    dim_y = 128;
-  }
-  dim3 threads(2, dim_y, 1);
 
-  std::cout << "Start inference............................" << std::flush;
-
+  std::cout << "Start inferencing and Identifying categories......................." << std::flush;
   auto exec_beg = std::chrono::steady_clock::now();
+
+  _infer_BF(
+    dev_W,
+    dev_rowsY,
+    dev_rlenY,
+    dev_Y,
+    dev_nerowsY,
+    num_dev,
+    each_partition,
+    remains,
+    results
+  );
+
+  auto exec_end = std::chrono::steady_clock::now();
+  std::cout << "finished execution and identification with "
+            << std::chrono::duration_cast<std::chrono::milliseconds>(exec_end - exec_beg).count()
+            << "ms"
+            << std::endl;
+  
+  checkCuda(cudaFree(Y[0]));
+  checkCuda(cudaFree(Y[1]));
+  checkCuda(cudaFree(rowsY[0]));
+  checkCuda(cudaFree(rowsY[1]));
+  checkCuda(cudaFree(rlenY[0]));
+  checkCuda(cudaFree(rlenY[1]));
+  for(auto& each_dev_W : dev_W) {
+    for(auto& w : each_dev_W) {
+      checkCuda(cudaFree(w));
+    }
+  }
+
+  return arr_to_Eigen_int(results, num_inputs);
+}
+
+template <typename T>
+void BFMultiGpu<T>::_infer_BF(
+  std::vector<std::vector<int*> >& dev_W,
+  std::vector<std::vector<int*> >& dev_rowsY,
+  std::vector<std::vector<int*> >& dev_rlenY,
+  std::vector<std::vector<T*> >& dev_Y,
+  std::vector<size_t>& dev_nerowsY,
+  size_t num_dev,
+  size_t each_partition,
+  size_t remains,
+  int* results
+) const {
+
+  std::vector<int*> dev_results(num_dev);
+  for(size_t dev = 0; dev < num_dev; ++dev) {
+    dev_results[dev] = results + dev * each_partition;
+  }
+
+  dim3 threads(2, 512, 1);
 
   std::vector<std::vector<cudaStream_t> > dev_stream;
   dev_stream.reserve(num_dev);
@@ -352,7 +406,6 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> BFMultiGpu<T>::infer(
   for(size_t dev = 0; dev < num_dev; ++dev) {
     dev_stream.emplace_back(stream);
   }
-  
 
   #pragma omp parallel num_threads(num_dev)
   {
@@ -422,41 +475,17 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> BFMultiGpu<T>::infer(
       checkCuda(cudaStreamSynchronize(dev_stream[dev][0]));
       #pragma omp barrier
     }
+    if(dev == num_dev - 1) {
+      identify<<<16, 512>>>(dev_Y[dev][0], each_partition + remains, _num_neurons_per_layer, dev_results[dev]);
+    }
+    else {
+      identify<<<16, 512>>>(dev_Y[dev][0], each_partition, _num_neurons_per_layer, dev_results[dev]);
+    }
+    checkCuda(cudaDeviceSynchronize());
     checkCuda(cudaStreamDestroy(dev_stream[dev][0]));
     checkCuda(cudaStreamDestroy(dev_stream[dev][1]));
   }
 
-  auto exec_end = std::chrono::steady_clock::now();
-  std::cout << "finished execution with " 
-            << std::chrono::duration_cast<std::chrono::milliseconds>(exec_end - exec_beg).count()
-            << "ms"
-            << std::endl;
-
-  std::cout << "Start scoring..............................." << std::flush;
-  auto score_beg = std::chrono::steady_clock::now();
-
-  auto score = get_score<T>(Y[_num_layers % 2], num_inputs, _num_neurons_per_layer);
-
-  auto score_end = std::chrono::steady_clock::now();
-  std::cout << "finished scoring with "
-            << std::chrono::duration_cast<std::chrono::milliseconds>(score_end - score_beg).count()
-            << "ms"
-            << std::endl;
-
-  
-  checkCuda(cudaFree(Y[0]));
-  checkCuda(cudaFree(Y[1]));
-  checkCuda(cudaFree(rowsY[0]));
-  checkCuda(cudaFree(rowsY[1]));
-  checkCuda(cudaFree(rlenY[0]));
-  checkCuda(cudaFree(rlenY[1]));
-  for(auto& each_dev_W : dev_W) {
-    for(auto& w : each_dev_W) {
-      checkCuda(cudaFree(w));
-    }
-  }
-
-  return score;
 }
 
 template <typename T>
