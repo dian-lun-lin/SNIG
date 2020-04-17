@@ -245,6 +245,31 @@ void tsv_file_to_binary_file(
   const size_t rows
 );
 
+template <typename T>
+void diagonal_to_binary_file(
+  const std::fs::path& weight_dir,
+  const size_t num_layers,
+  const size_t rows,
+  const size_t cols,
+  const size_t COL_BLK,
+  const size_t N_SLAB
+);
+
+template <typename T>
+void diagonal_to_binary_file(
+  std::fs::path input_path,
+  const size_t rows,
+  const size_t cols
+);
+
+inline
+void diagonal_to_binary_file(
+  std::fs::path golden_path,
+  const size_t num_features,
+  const size_t num_layers,
+  const size_t rows
+);
+
 //-----------------------------------------------------------------------------
 //Definition of reader function
 //-----------------------------------------------------------------------------
@@ -949,4 +974,97 @@ void tsv_file_to_binary_file(
   );
   
 }
+
+template <typename T>
+void diagonal_to_binary_file(
+  const std::fs::path& weight_dir,
+  const size_t num_layers,
+  const size_t rows,
+  const size_t cols,
+  const size_t COL_BLK,
+  const size_t N_SLAB
+) {
+  for(size_t i = 0; i < num_layers; ++i) {
+    size_t nnz = cols;
+
+    auto row_array = std::make_unique<int[]>(rows * N_SLAB + 1);
+    auto col_array = std::make_unique<int[]>(nnz);
+    auto data_array = std::make_unique<T[]>(nnz);
+      
+    std::iota(row_array.get(), row_array.get() + rows * N_SLAB + 1, 0);
+    std::iota(col_array.get(), col_array.get() + nnz, 0);
+    std::fill(data_array.get(), data_array.get() + nnz, 100);
+
+    std::fs::path output_file = weight_dir;
+    output_file /= "n" + std::to_string(cols) + "-l"
+      + std::to_string(i + 1) + ".b";
+    
+    std::ofstream out(output_file, std::ios::out | std::ios::binary);
+    out.write((char*)&rows, sizeof(size_t));
+    out.write((char*)&nnz, sizeof(size_t));
+    out.write((char*)row_array.get(), sizeof(int) * (rows * N_SLAB + 1));
+    out.write((char*)col_array.get(), sizeof(int) * (nnz));
+    out.write((char*)data_array.get(), sizeof(T) * (nnz));
+  }
+}
+
+template <typename T>
+void diagonal_to_binary_file(
+  std::fs::path input_path,
+  const size_t rows,
+  const size_t cols
+) {
+  //T is either float, half, or double type
+  static_assert(
+    std::is_same<T, float>::value || std::is_same<T, double>::value || std::is_same<T, half>::value,
+    "data type must be either float, double, or half"
+  );
+
+  auto data_array = std::make_unique<T[]>(rows * cols);
+  std::memset(data_array.get(), 0, sizeof(T) * rows * cols);
+
+  size_t min_diagonal = std::min(rows, cols);
+  for(size_t i = 0; i < min_diagonal; ++i) {
+    *(data_array.get() + i * cols + i) = T(100);
+  }
+
+  std::fs::path p = input_path;
+  p /= "sparse-images-" + std::to_string(cols) + ".b";
+
+  std::ofstream out(p, std::ios::out | std::ios::binary);
+  out.write((char*)&rows, sizeof(size_t));
+  out.write((char*)&cols, sizeof(size_t));
+  out.write((char*)data_array.get(), sizeof(T) * (rows * cols));
+}
+
+inline
+void diagonal_to_binary_file(
+  std::fs::path golden_path,
+  const size_t num_features,
+  const size_t num_layers,
+  const size_t rows
+) {
+
+  std::string line;
+  size_t min_diagonal = std::min(rows, num_features);
+
+  Eigen::Matrix<int, Eigen::Dynamic, 1> golden = Eigen::Matrix<int, Eigen::Dynamic, 1>::Zero(rows, 1);
+  for(size_t i = 0; i < min_diagonal; ++i) {
+    golden(i, 0) = 1;
+  }
+
+
+  auto p = golden_path;
+  p /= "neuron" + std::to_string(num_features) + "-l" + std::to_string(num_layers) + "-categories.b";
+
+  std::ofstream out(p, std::ios::out | std::ios::binary);
+
+  out.write((char*)&rows, sizeof(size_t));
+  out.write(
+    (char*) golden.data(),
+    sizeof(Eigen::Matrix<int, Eigen::Dynamic, 1>::Scalar) * rows
+  );
+  
+}
+
 } // end of namespace snig-----------------------------------------------
