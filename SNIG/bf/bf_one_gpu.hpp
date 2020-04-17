@@ -37,6 +37,16 @@ class BFOneGpu {
     size_t _pp_wlen;
     size_t _pp_wsize;
 
+    void _infer_BF(
+      std::vector<int*>& d_W,
+      std::vector<int*>& rowsY,
+      std::vector<int*>& rlenY,
+      std::vector<T*>& Y,
+      size_t nerowsY,
+      const size_t num_inputs,
+      int* results
+    ) const;
+
     void _non_empty_rows(
       const size_t num_inputs,
       int* rlenY,
@@ -185,7 +195,7 @@ const std::fs::path& input_path,
   
   // d_W[0]: present layer 
   // d_W[1]: next layer
-  int *d_W[2];
+  std::vector<int*> d_W(2, nullptr);
   checkCuda(cudaMalloc(
     &d_W[0],
     _pp_wsize
@@ -201,8 +211,9 @@ const std::fs::path& input_path,
     cudaMemcpyHostToDevice
   ));
 
-  T* Y[2];  
-  int *rowsY[2], *rlenY[2];
+  std::vector<T*> Y(2, nullptr);  
+  std::vector<int*> rowsY(2, nullptr);
+  std::vector<int*> rlenY(2, nullptr);
 
   checkCuda(cudaMallocManaged(&Y[0], sizeof(T) * num_inputs * _num_neurons_per_layer));
   checkCuda(cudaMallocManaged(&Y[1], sizeof(T) * num_inputs * _num_neurons_per_layer));
@@ -218,30 +229,57 @@ const std::fs::path& input_path,
   size_t nerowsY{0};
   read_input_binary<T>(input_path, Y[0], rlenY[0], rowsY[0], nerowsY);
 
+  //final results allocation
+  int* results;
+  checkCuda(cudaMallocManaged(&results, sizeof(int) * num_inputs));
+  checkCuda(cudaMemset(results, 0, sizeof(int) * num_inputs));
+
   auto pp_end = std::chrono::steady_clock::now();
   
   std::cout << "finished preprocessing with " 
             << std::chrono::duration_cast<std::chrono::milliseconds>(pp_end - pp_beg).count()
             << "ms"
             << std::endl;
-  int dim_y{0};
-  if(_num_neurons_per_layer == 1024) {
-    dim_y = 16;
-  }
-  else if(_num_neurons_per_layer == 4096) {
-    dim_y = 32;
-  }
-  else if(_num_neurons_per_layer == 16384) {
-    dim_y = 64;
-  }
-  dim3 threads(4, dim_y, 1);
 
-  std::cout << "Start inference............................" << std::flush;
-
+  std::cout << "Start inferencing and Identifying categories......................." << std::flush;
   auto exec_beg = std::chrono::steady_clock::now();
 
-  cudaStream_t stream[2];
+  _infer_BF(d_W, rowsY, rlenY, Y, nerowsY, num_inputs, results);
 
+  auto exec_end = std::chrono::steady_clock::now();
+  std::cout << "finished execution and identification with "
+            << std::chrono::duration_cast<std::chrono::milliseconds>(exec_end - exec_beg).count()
+            << "ms"
+            << std::endl;
+
+  auto results_eigen =  arr_to_Eigen_int(results, num_inputs);
+
+  checkCuda(cudaFree(Y[0]));
+  checkCuda(cudaFree(Y[1]));
+  checkCuda(cudaFree(rowsY[0]));
+  checkCuda(cudaFree(rowsY[1]));
+  checkCuda(cudaFree(rlenY[0]));
+  checkCuda(cudaFree(rlenY[1]));
+  checkCuda(cudaFree(d_W[0]));
+  checkCuda(cudaFree(d_W[1]));
+  checkCuda(cudaFree(results));
+
+  return results_eigen;
+}
+
+template <typename T>
+void BFOneGpu<T>::_infer_BF(
+  std::vector<int*>& d_W,
+  std::vector<int*>& rowsY,
+  std::vector<int*>& rlenY,
+  std::vector<T*>& Y,
+  size_t nerowsY,
+  const size_t num_inputs,
+  int* results
+) const {
+  dim3 threads(2, 512, 1);
+
+  cudaStream_t stream[2];
   checkCuda(cudaStreamCreate(&stream[0]));
   checkCuda(cudaStreamCreate(&stream[1]));
 
@@ -284,41 +322,16 @@ const std::fs::path& input_path,
     checkCuda(cudaMemset(
       Y[cur_layer % 2],
       0,
-      sizeof(T) * num_inputs * _num_neurons_per_layer)
-    );
+      sizeof(T) * num_inputs * _num_neurons_per_layer
+    ));
     checkCuda(cudaStreamSynchronize(stream[0]));
   }
 
-  auto exec_end = std::chrono::steady_clock::now();
-  std::cout << "finished execution with " 
-            << std::chrono::duration_cast<std::chrono::milliseconds>(exec_end - exec_beg).count()
-            << "ms"
-            << std::endl;
-
-  std::cout << "Start scoring..............................." << std::flush;
-  auto score_beg = std::chrono::steady_clock::now();
-
-  auto score = get_score<T>(Y[_num_layers % 2], num_inputs, _num_neurons_per_layer);
-
-  auto score_end = std::chrono::steady_clock::now();
-  std::cout << "finished scoring with "
-            << std::chrono::duration_cast<std::chrono::milliseconds>(score_end - score_beg).count()
-            << "ms"
-            << std::endl;
+  identify<T><<<16, 512>>>(Y[0], num_inputs, _num_neurons_per_layer, results);
+  checkCuda(cudaDeviceSynchronize());
 
   checkCuda(cudaStreamDestroy(stream[0]));
   checkCuda(cudaStreamDestroy(stream[1]));
-  
-  checkCuda(cudaFree(Y[0]));
-  checkCuda(cudaFree(Y[1]));
-  checkCuda(cudaFree(rowsY[0]));
-  checkCuda(cudaFree(rowsY[1]));
-  checkCuda(cudaFree(rlenY[0]));
-  checkCuda(cudaFree(rlenY[1]));
-  checkCuda(cudaFree(d_W[0]));
-  checkCuda(cudaFree(d_W[1]));
-
-  return score;
 }
 
 template <typename T>

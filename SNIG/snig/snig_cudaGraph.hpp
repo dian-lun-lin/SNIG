@@ -53,7 +53,8 @@ class SNIGCudaGraph {
       const size_t num_dev,
       const size_t batch_size,
       const size_t batch_ylen,
-      const size_t batch_ysize
+      const size_t batch_ysize,
+      int* results
     ) const;
 
     std::tuple<cudaGraph_t, std::vector<cudaGraphNode_t>, cudaKernelNodeParams> _flatterned_graph_manual(
@@ -248,8 +249,8 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> SNIGCudaGraph<T>::infer(
   T* source_Y;
   bool* source_rowsY;
   checkCuda(cudaMallocManaged(&source_Y, ysize));
-  checkCuda(cudaMallocManaged(&source_rowsY, sizeof(bool) * num_inputs));
-  checkCuda(cudaMemset(source_rowsY, 1, sizeof(bool) * num_inputs));
+  checkCuda(cudaMallocManaged(&source_rowsY, sizeof(bool) * num_inputs * _N_SLAB));
+  checkCuda(cudaMemset(source_rowsY, 1, sizeof(bool) * num_inputs * _N_SLAB));
 
   std::vector<std::vector<T*> > dev_Y;
   std::vector<std::vector<bool*> > dev_rowsY;
@@ -261,14 +262,20 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> SNIGCudaGraph<T>::infer(
   for(size_t dev = 0; dev < num_dev; ++dev) {
     cudaSetDevice(dev);
     checkCuda(cudaMalloc(&Y[1], batch_ysize));
-    checkCuda(cudaMalloc(&rowsY[1], sizeof(bool) * batch_size));
+    checkCuda(cudaMalloc(&rowsY[1], sizeof(bool) * batch_size * _N_SLAB));
     checkCuda(cudaMemset(Y[1], 0, batch_ysize));
-    checkCuda(cudaMemset(rowsY[1], 0, sizeof(bool) * batch_size));
+    checkCuda(cudaMemset(rowsY[1], 0, sizeof(bool) * batch_size * _N_SLAB));
     dev_Y.push_back(Y);
     dev_rowsY.push_back(rowsY);
   }
+  cudaSetDevice(0);
 
   read_input_binary<T>(input_path, source_Y);
+
+  //final results allocation
+  int* results;
+  checkCuda(cudaMallocManaged(&results, sizeof(int) * num_inputs));
+  checkCuda(cudaMemset(results, 0, sizeof(int) * num_inputs));
 
   auto pp_end = std::chrono::steady_clock::now();
   
@@ -277,32 +284,21 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> SNIGCudaGraph<T>::infer(
             << "ms"
             << std::endl;
 
-  std::cout << "Start inference............................" << std::flush;
+  std::cout << "Start inferencing and Identifying categories......................." << std::flush;
   auto exec_beg = std::chrono::steady_clock::now();
 
-  _infer_flatterned_graph(source_Y, source_rowsY, dev_Y, dev_rowsY, dev_W, num_inputs, num_buff, num_dev, batch_size, batch_ylen, batch_ysize);
+  _infer_flatterned_graph(source_Y, source_rowsY, dev_Y, dev_rowsY, dev_W, num_inputs, num_buff, num_dev, batch_size, batch_ylen, batch_ysize, results);
 
   auto exec_end = std::chrono::steady_clock::now();
-  std::cout << "finished execution with "
+  std::cout << "finished execution and identification with "
             << std::chrono::duration_cast<std::chrono::milliseconds>(exec_end - exec_beg).count()
             << "ms"
             << std::endl;
 
-  std::cout << "Start scoring..............................." << std::flush;
-  auto score_beg = std::chrono::steady_clock::now();
+  auto results_eigen = arr_to_Eigen_int(results, num_inputs);
 
-  auto score = get_score<T>(source_Y, num_inputs, _num_neurons_per_layer);
-
-  auto score_end = std::chrono::steady_clock::now();
-  std::cout << "finished scoring with "
-            << std::chrono::duration_cast<std::chrono::milliseconds>(score_end - score_beg).count()
-            << "ms"
-            << std::endl;
-
-  cudaSetDevice(0);
   checkCuda(cudaFree(source_Y));
   checkCuda(cudaFree(source_rowsY));
-
   for(auto& W_in_dev : dev_W) {
     for(auto& each_W : W_in_dev) {
       checkCuda(cudaFree(each_W));
@@ -314,8 +310,9 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> SNIGCudaGraph<T>::infer(
   for(auto& rowsY_in_dev : dev_rowsY) {
       checkCuda(cudaFree(rowsY_in_dev[1]));
   }
+  checkCuda(cudaFree(results));
 
-  return score;
+  return results_eigen; 
 }
 
 template <typename T>
@@ -330,8 +327,11 @@ void SNIGCudaGraph<T>::_infer_flatterned_graph(
   const size_t num_dev,
   const size_t batch_size,
   const size_t batch_ylen,
-  const size_t batch_ysize
+  const size_t batch_ysize,
+  int* results
 ) const {
+  std::vector<int*> dev_results(num_dev, nullptr);
+
   std::vector<cudaStream_t> stream_for_graphs(num_dev);
   std::vector<cudaGraphExec_t> executors(num_dev);
   std::vector<cudaGraph_t> graphs;
@@ -384,9 +384,11 @@ void SNIGCudaGraph<T>::_infer_flatterned_graph(
       size_t beg_inputs = finished_inputs.fetch_add(batch_size);
       while(beg_inputs < num_inputs) {
         dev_Y[dev][0] = source_Y + beg_inputs * _num_neurons_per_layer;
-        dev_rowsY[dev][0] = source_rowsY + beg_inputs;
+        dev_rowsY[dev][0] = source_rowsY + beg_inputs * _N_SLAB;
+        dev_results[dev] = results + beg_inputs;
         checkCuda(cudaMemPrefetchAsync(dev_Y[dev][0], batch_ysize, dev, NULL));
-        checkCuda(cudaMemPrefetchAsync(dev_rowsY[dev][0], sizeof(bool) * batch_size, dev, NULL));
+        checkCuda(cudaMemPrefetchAsync(dev_rowsY[dev][0], sizeof(bool) * batch_size * _N_SLAB, dev, NULL));
+        checkCuda(cudaMemPrefetchAsync(dev_results[dev], sizeof(int*) * batch_size, dev, NULL));
         _set_graph_param(
           dev_W[dev],
           dev_Y[dev],
@@ -397,6 +399,8 @@ void SNIGCudaGraph<T>::_infer_flatterned_graph(
           dev_infer_params[dev]
         );
         _graph_launch(executors[dev],stream_for_graphs[dev]);
+        identify<T><<<16, 512>>>(dev_Y[dev][0], batch_size, _num_neurons_per_layer, dev_results[dev]);
+        checkCuda(cudaDeviceSynchronize());
         beg_inputs = finished_inputs.fetch_add(batch_size);
       }
     });
@@ -486,8 +490,8 @@ template <typename T>
         graph,
         cpy_dependencies[k].data(),
         cpy_dependencies[k].size(),
-        &w_memcpy_params)
-      );
+        &w_memcpy_params
+      ));
       cpy_dependencies[k].clear();
       cpy_dependencies[k].push_back(w_memcpy_nodes[k]);
 
@@ -518,8 +522,8 @@ template <typename T>
         graph,
         infer_dependencies[k].data(),
         infer_dependencies[k].size(),
-        &infer_params)
-      );
+        &infer_params
+      ));
 
       infer_dependencies[k].clear();
       if(k < num_buff - 1) {

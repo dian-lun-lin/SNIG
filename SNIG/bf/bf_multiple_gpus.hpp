@@ -251,6 +251,7 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> BFMultiGpu<T>::infer(
   //final results allocation
   int* results;
   checkCuda(cudaMallocManaged(&results, sizeof(int) * num_inputs));
+  checkCuda(cudaMemset(results, 0, sizeof(int) * num_inputs));
 
   //partition
   //assume all rows of inputs are non-empty.
@@ -364,6 +365,8 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> BFMultiGpu<T>::infer(
             << std::chrono::duration_cast<std::chrono::milliseconds>(exec_end - exec_beg).count()
             << "ms"
             << std::endl;
+
+  auto results_eigen = arr_to_Eigen_int(results, num_inputs);
   
   checkCuda(cudaFree(Y[0]));
   checkCuda(cudaFree(Y[1]));
@@ -376,8 +379,9 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> BFMultiGpu<T>::infer(
       checkCuda(cudaFree(w));
     }
   }
+  checkCuda(cudaFree(results));
 
-  return arr_to_Eigen_int(results, num_inputs);
+  return results_eigen;
 }
 
 template <typename T>
@@ -476,10 +480,10 @@ void BFMultiGpu<T>::_infer_BF(
       #pragma omp barrier
     }
     if(dev == num_dev - 1) {
-      identify<<<16, 512>>>(dev_Y[dev][0], each_partition + remains, _num_neurons_per_layer, dev_results[dev]);
+      identify<T><<<16, 512>>>(dev_Y[dev][0], each_partition + remains, _num_neurons_per_layer, dev_results[dev]);
     }
     else {
-      identify<<<16, 512>>>(dev_Y[dev][0], each_partition, _num_neurons_per_layer, dev_results[dev]);
+      identify<T><<<16, 512>>>(dev_Y[dev][0], each_partition, _num_neurons_per_layer, dev_results[dev]);
     }
     checkCuda(cudaDeviceSynchronize());
     checkCuda(cudaStreamDestroy(dev_stream[dev][0]));

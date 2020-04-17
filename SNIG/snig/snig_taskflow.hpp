@@ -234,13 +234,10 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> SNIGTaskflow<T>::infer(
   size_t ysize = ylen * sizeof(T);
 
   T* source_Y;
-  int* results;
   bool* source_rowsY;
   checkCuda(cudaMallocManaged(&source_Y, ysize));
-  checkCuda(cudaMallocManaged(&results, sizeof(int) * num_inputs));
   checkCuda(cudaMallocManaged(&source_rowsY, sizeof(bool) * num_inputs * _N_SLAB));
   checkCuda(cudaMemset(source_rowsY, 1, sizeof(bool) * num_inputs * _N_SLAB));
-  checkCuda(cudaMemset(results, 0, sizeof(int) * num_inputs));
 
   std::vector<std::vector<T*> > dev_Y;
   std::vector<std::vector<bool*> > dev_rowsY;
@@ -260,6 +257,11 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> SNIGTaskflow<T>::infer(
   }
 
   read_input_binary<T>(input_path, source_Y);
+  
+  //final results allocation
+  int* results;
+  checkCuda(cudaMallocManaged(&results, sizeof(int) * num_inputs));
+  checkCuda(cudaMemset(results, 0, sizeof(int) * num_inputs));
 
   auto pp_end = std::chrono::steady_clock::now();
   
@@ -279,10 +281,10 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> SNIGTaskflow<T>::infer(
             << "ms"
             << std::endl;
 
-  cudaSetDevice(0);
+  auto results_eigen = arr_to_Eigen_int(results, num_inputs);
+
   checkCuda(cudaFree(source_Y));
   checkCuda(cudaFree(source_rowsY));
-
   for(auto& W_in_dev : dev_W) {
     for(auto& each_W : W_in_dev) {
       checkCuda(cudaFree(each_W));
@@ -294,8 +296,9 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> SNIGTaskflow<T>::infer(
   for(auto& rowsY_in_dev : dev_rowsY) {
       checkCuda(cudaFree(rowsY_in_dev[1]));
   }
+  checkCuda(cudaFree(results));
 
-  return arr_to_Eigen_int(results, num_inputs);
+  return results_eigen;
 }
 
 template <typename T>
