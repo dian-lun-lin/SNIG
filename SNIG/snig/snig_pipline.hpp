@@ -10,6 +10,7 @@
 #include <chrono>
 #include <vector>
 #include <queue>
+#include <mutex>
 
 namespace std {
   namespace fs = experimental::filesystem;  
@@ -324,9 +325,11 @@ void SNIGPipeline<T>:: _infer_taskflow(
 
   std::vector<int*> dev_results(num_dev, nullptr);
 
-  std::vector<std::queue<int> > dev_start_batch(num_dev);
-  std::queue<int> first_dev_que;
-  for(size_t i = 0; i < num_batches; ++i) {
+  std::vector<std::queue<size_t> > dev_start_batch(num_dev);
+  std::vector<std::mutex> dev_que_mutex(num_dev);
+  std::vector<std::condition_variable> dev_que_cv(num_dev);
+  std::queue<size_t> first_dev_que;
+  for(size_t i = 0; i < num_batches + 1; ++i) {
     first_dev_que.emplace(i * batch_size);
   }
   dev_start_batch[0] = std::move(first_dev_que);
@@ -343,40 +346,36 @@ void SNIGPipeline<T>:: _infer_taskflow(
     checkCuda(cudaStreamCreate(&infer_stream));
 
     while(!stop) {
-      //check if current queue is empty
       size_t beg_inputs;
+
       if(dev != 0) {
-        while(dev_start_batch[dev].empty()) {
-          //wait for past device inferences current batch
-        }
-        beg_inputs = dev_start_batch[dev].front();
-        dev_start_batch[dev].pop();
-        if(beg_inputs == num_inputs + 1) {
-          //notify next device to finish
-          if(dev != num_dev - 1) {
-            dev_start_batch[dev + 1].emplace(num_inputs + 1);
-          }
-          //this device finished all batches
-          stop = true;
-          continue;
-        }
-      }
-      else {
-        if(dev_start_batch[dev].empty()) {
-          //notify next device to finish
-          if(dev != num_dev - 1) {
-            dev_start_batch[dev + 1].emplace(num_inputs + 1);
-          }
-          //first device finished all batches
-          stop = true;
-          continue;
-        }
-        else {
-          beg_inputs = dev_start_batch[dev].front();
-          dev_start_batch[dev].pop();
+        //check if current queue is empty
+        {
+          std::unique_lock<std::mutex> lock(dev_que_mutex[dev]);
+          dev_que_cv[dev].wait(lock, [&](){ return !dev_start_batch[dev].empty();});
         }
       }
 
+      {
+        //get batch to infer
+        std::unique_lock<std::mutex> lock(dev_que_mutex[dev]);
+        beg_inputs = dev_start_batch[dev].front();
+        dev_start_batch[dev].pop();
+      }
+
+      if(beg_inputs == num_inputs) {
+        //notify next device to finish
+        if(dev != num_dev - 1) {
+          {
+            std::unique_lock<std::mutex> lock(dev_que_mutex[dev]);
+            dev_start_batch[dev + 1].emplace(num_inputs);
+            dev_que_cv[dev + 1].notify_one();
+          }
+        }
+        //this device finished all batches
+        stop = true;
+        continue;
+      }
       dev_Y[dev][0] = source_Y + beg_inputs * _num_neurons_per_layer;
       dev_rowsY[dev][0] = source_rowsY + beg_inputs * _N_SLAB;
       dev_results[dev] = results + beg_inputs;
@@ -402,9 +401,14 @@ void SNIGPipeline<T>:: _infer_taskflow(
         checkCuda(cudaStreamSynchronize(infer_stream));
       }
       if(dev != num_dev - 1) {
-        dev_start_batch[dev + 1].emplace(beg_inputs);
+        //notify next device to infer
+        {
+          std::unique_lock<std::mutex> lock(dev_que_mutex[dev]);
+          dev_start_batch[dev + 1].emplace(beg_inputs);
+        }
+        dev_que_cv[dev + 1].notify_one();
       }
-      if(dev == num_dev - 1) {
+      else {
         //last device identify
         identify<T><<<16, 512, 0, infer_stream>>>(dev_Y[dev][0], batch_size, _num_neurons_per_layer, dev_results[dev]);
         checkCuda(cudaStreamSynchronize(infer_stream));
