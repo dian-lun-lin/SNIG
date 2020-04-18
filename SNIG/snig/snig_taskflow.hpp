@@ -327,7 +327,7 @@ void SNIGTaskflow<T>:: _infer_taskflow(
 
   //dev_results indicate where to identify results to different categories
   std::atomic<size_t> finished_inputs{0};
-  std::vector<int*> dev_results(num_dev);
+  std::vector<int*> dev_results(num_dev, nullptr);
 
   dim3 grid_dim(batch_size, _N_SLAB, 1);
   dim3 block_dim(2, 512, 1);
