@@ -124,6 +124,15 @@ int main(int argc, char* argv[]) {
     );
     result = snig_taskflow.infer(input_path, 60000, 5000, 10, num_dev);
   }
+  else if(mode == "SNIG_pipeline") {
+    snig::SNIGPipeline<float> snig_pipeline(
+      weight_path, 
+      bias,
+      num_neurons_per_layer, 
+      num_layers
+    );
+    result = snig_pipeline.infer(input_path, 60000, 5000, num_dev);
+  }
   auto golden = snig::read_golden_binary(golden_path);
   if(snig::is_passed(result, golden)) {
     std::cout << "CHALLENGE PASSED\n";
