@@ -745,7 +745,7 @@ void snig_inference(
     }
     for(size_t j = threadIdx.y + k * COL_BLK; j < (k + 1) * COL_BLK; j += blockDim.y) {
       T valY = Y0[blockIdx.x * num_neurons_per_layer + j];
-      if(valY == T(0)) {
+      if(valY == 0) {
         continue;
       }
       int begOffW = roffW[blockIdx.y * num_neurons_per_layer + j] + threadIdx.x;
@@ -760,10 +760,9 @@ void snig_inference(
   __syncthreads();
   for(size_t j = tid; j < COL_BLK; j += blockDim.x * blockDim.y) {
     //use j = tid directly
-    T v = shRow[j] > T(0) ? shRow[j] : T(0);
-    v = v < T(32) ? v : T(32);
+    T v = min(T(32), max(shRow[j], T(0)));
     Y1[blockIdx.x * num_neurons_per_layer + blockIdx.y * COL_BLK + j] = v;
-    is_empty[v > T(0)] = false;
+    is_empty[v > 0] = false;
   }
   //if no one set is_non_emtpy[1] to true
   //it means this row is empty

@@ -366,7 +366,7 @@ void SNIGTaskflow<T>:: _infer_taskflow(
             dev_W[dev][k],
             _h_pinned_weight + (cur_layer + k) * _pp_wlen,
             _pp_wlen
-          ).name("Weight_copy_H2D"));
+          ).name("weight_copy"));
 
           int* roffw = dev_W[dev][k];
           int* colsw = dev_W[dev][k] + _num_neurons_per_layer * _N_SLAB + 1;
