@@ -5,7 +5,6 @@
 #include <SNIG/utility/cuda_error.hpp>
 #include <cusparse_v2.h>
 #include <algorithm>
-#include <thrust/scan.h>
 
 namespace snig{
 
@@ -39,23 +38,6 @@ void resize_CPU(CSRMatrix<T>& target, int rows);
 template <typename T>
 void add_bias_relu_CPU(T* arr, T bias, int rows);
 
-template <typename T>
-__global__ 
-void bf_inference(
-  const T* Y0,
-  const size_t nerowsY,
-  const int* rowsY0,
-  int* rlenY0,
-  const size_t COL_BLK,
-  const size_t N_SLAB,
-  const size_t num_neurons_per_layer,
-  const int* roffW,
-  const int* colsW,
-  const T* valsW,
-  const T bias,
-  T* Y1,
-  int* rlenY1
-);
 
 template <typename T>
 __global__ 
@@ -89,32 +71,6 @@ void bf_wo_host_inference(
   //bool* rowsY1,
   //T* Y1
 //);
-
-template <typename T>
-__global__ 
-void snig_inference(
-  const T* Y0,
-  const bool* rowsY0,
-  const size_t COL_BLK,
-  const size_t N_SLAB,
-  const size_t num_neurons_per_layer,
-  const int* roffW,
-  const int* colsW,
-  const T* valsW,
-  const T bias,
-  bool* rowsY1,
-  T* Y1
-);
-
-template<typename T>
-__global__
-void identify(
-  T* target_arr,
-  const size_t batch_size,
-  const size_t num_neurons_per_layer,
-  int* result_arr
-);
-
 
 //-----------------------------------------------------------------------------
 //Definition of task function
@@ -409,71 +365,6 @@ void resize_CPU(CSRMatrix<T>& target, int rows) {
   //}
 //}
 
-template <typename T>
-__global__ 
-void bf_inference(
-  const T* Y0,
-  const size_t nerowsY,
-  const int* rowsY0,
-  int* rlenY0,
-  const size_t COL_BLK,
-  const size_t N_SLAB,
-  const size_t num_neurons_per_layer,
-  const int* roffW,
-  const int* colsW,
-  const T* valsW,
-  const T bias,
-  T* Y1,
-  int* rlenY1
-) {
-
-  if(blockIdx.x >= nerowsY) {
-    return;
-  }
-
-  extern  __shared__ T shRow[];
-
-  int tid = threadIdx.y * blockDim.x + threadIdx.x;
-  int rid = rowsY0[blockIdx.x];
-  __syncthreads();
-  if(tid == 0) {
-    rlenY0[rid] = 0;
-    rlenY1[rid] = 0;
-  }
-
-  for(size_t i = 0; i < N_SLAB; i++) {
-    __syncthreads();
-    for(size_t j = threadIdx.x; j < COL_BLK; j++) {
-      shRow[j] = 0;  
-    }
-    __syncthreads();
-    for(size_t j = threadIdx.y; j < num_neurons_per_layer; j += blockDim.y) {
-      T valY = Y0[rid * num_neurons_per_layer + j];
-      if(valY == 0) {
-        continue;
-      }
-      int begOffW = roffW[i * num_neurons_per_layer + j] + threadIdx.x;
-      int endOffW = roffW[i * num_neurons_per_layer + j + 1];
-      for(int k = begOffW; k < endOffW; k += blockDim.x) {
-        int colW = colsW[k];
-        T valW = valsW[k];
-        atomicAdd(&shRow[colW - i * COL_BLK], valY * valW);
-      }
-    }
-    __syncthreads();
-    int count = 0;
-    for(size_t j = 0; j < COL_BLK; j += blockDim.x * blockDim.y) {
-      T v = j + tid < COL_BLK ? shRow[j + tid] + bias : -1;
-      count += __syncthreads_count(v > 0);
-      if(j + tid < COL_BLK) {
-        Y1[rid * num_neurons_per_layer + i * COL_BLK + j + tid] = min(T(32), max(T(0), v));
-      }
-    }
-    if(tid == 0) {
-      rlenY1[rid] += count;
-    }
-  }
-}
 
 template <typename T>
 __global__ 
@@ -679,119 +570,5 @@ void bf_wo_host_inference(
   ////no need to syncthreads here
   //rowsY1[blockIdx.x] = is_nerow[1];
 //}
-
-template <typename T>
-__global__ 
-void snig_inference(
-  const T* Y0,
-  const bool* rowsY0,
-  const size_t COL_BLK,
-  const size_t N_SLAB,
-  const size_t num_neurons_per_layer,
-  const int* roffW,
-  const int* colsW,
-  const T* valsW,
-  const T bias,
-  bool* rowsY1,
-  T* Y1
-) {
-  int tid = threadIdx.y * blockDim.x + threadIdx.x;
-
-  //N_SLAB is small enough to compute by each single thread
-  bool is_all_empty = true;
-  for(size_t k = 0; k < N_SLAB; ++k) {
-    is_all_empty &= !rowsY0[blockIdx.x * N_SLAB + k];
-  }
-
-  if(is_all_empty) {
-    //memory reset here
-    //avoid calling cudaMemset
-    // threads in the first two ifs are in the same warp
-    //Hence it doesn't effect performance
-    if(rowsY1[blockIdx.x * N_SLAB + blockIdx.y]) {
-      for(size_t j = blockIdx.y * COL_BLK + tid; j < (blockIdx.y + 1) * COL_BLK; j += blockDim.x * blockDim.y) {
-        Y1[blockIdx.x * num_neurons_per_layer + j] = T(0);
-      }
-      __syncthreads();
-      if(tid == 0) {
-        rowsY1[blockIdx.x * N_SLAB + blockIdx.y] = false;
-      } 
-    }
-    return;
-  }
-
-  extern __shared__ T shRow[];
-
-  //use 2 length bool array in share memory(is_empty[]) to avoid synchronization
-  //is_empty[0] represents whether this row is empty
-  //if is_empty[0] is true, this row is empty
-  //rowsY1[blockIdx.x] will then be caculated at next iteration.
-  __shared__ bool is_empty[2];
-  if(tid == 0) {
-    is_empty[1] = true;
-  }
-
-  //use stride to reset shRow effectively
-  //set shRow to bias directly
-  //divide N_SLAB to blockIdx.y
-  for(size_t k = tid; k < COL_BLK; k += blockDim.x * blockDim.y) {
-    shRow[k] = bias;  
-  }
-  __syncthreads();
-
-  for(size_t k = 0; k < N_SLAB; ++k) {
-    if(!rowsY0[blockIdx.x * N_SLAB + k]) {
-      continue;
-    }
-    for(size_t j = threadIdx.y + k * COL_BLK; j < (k + 1) * COL_BLK; j += blockDim.y) {
-      T valY = Y0[blockIdx.x * num_neurons_per_layer + j];
-      if(valY == 0) {
-        continue;
-      }
-      int begOffW = roffW[blockIdx.y * num_neurons_per_layer + j] + threadIdx.x;
-      int endOffW = roffW[blockIdx.y * num_neurons_per_layer + j + 1];
-      for(int i = begOffW; i < endOffW; i += blockDim.x) {
-        int colW = colsW[i];
-        T valW = valsW[i];
-        atomicAdd(&shRow[colW - blockIdx.y * COL_BLK], valY * valW);
-      }
-    }
-  }
-  __syncthreads();
-  for(size_t j = tid; j < COL_BLK; j += blockDim.x * blockDim.y) {
-    //use j = tid directly
-    T v = min(T(32), max(shRow[j], T(0)));
-    Y1[blockIdx.x * num_neurons_per_layer + blockIdx.y * COL_BLK + j] = v;
-    is_empty[v > 0] = false;
-  }
-  //if no one set is_non_emtpy[1] to true
-  //it means this row is empty
-  //set rowsY1[this row] = false then
-  __syncthreads();
-  if(tid == 0) {
-    rowsY1[blockIdx.x * N_SLAB + blockIdx.y] = !is_empty[1];
-  }
-}
-
-template<typename T>
-__global__
-void identify(
-  T* target_arr,
-  const size_t batch_size,
-  const size_t num_neurons_per_layer,
-  int* result_arr
-) {
-  int tid = blockIdx.x * blockDim.x + threadIdx.x;
-  for(int i = tid; i < batch_size; i += gridDim.x * blockDim.x) {
-    T sum = thrust::reduce(
-      thrust::device,
-      target_arr + i * num_neurons_per_layer,
-      target_arr + (i + 1) * num_neurons_per_layer,
-      0,
-      thrust::plus<T>()
-    );
-    result_arr[i] = sum > 0 ? 1 : 0;
-  }
-};
 
 }// end of namespace snig ----------------------------------------------

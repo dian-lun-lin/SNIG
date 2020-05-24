@@ -5,8 +5,8 @@
 #include <SNIG/utility/reader.hpp>
 #include <SNIG/utility/matrix_format.h>
 #include <SNIG/utility/cuda_error.hpp>
+#include <SNIG/snig/kernel.hpp>
 #include <SNIG/utility/scoring.hpp>
-#include <SNIG/utility/task.hpp>
 #include <chrono>
 #include <vector>
 #include <queue>
@@ -215,15 +215,9 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> SNIGPipeline<T>::infer(
   for(size_t dev = 0; dev < num_dev; ++dev) {
     cudaSetDevice(dev);
     int* W;
-    checkCuda(cudaMalloc(
+    checkCuda(cudaMallocManaged(
       &W,
       _pp_wsize * num_layers_per_gpu
-    ));
-    checkCuda(cudaMemcpy(
-      W,
-      _h_pinned_weight + dev * num_layers_per_gpu * _pp_wlen,
-      _pp_wsize * num_layers_per_gpu,
-      cudaMemcpyHostToDevice
     ));
     dev_record_W.emplace_back(W);
     for(size_t cur_layer = 0; cur_layer < num_layers_per_gpu; ++cur_layer) {
@@ -278,6 +272,17 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> SNIGPipeline<T>::infer(
 
   std::cout << "Start inferencing and Identifying categories......................." << std::flush;
   auto exec_beg = std::chrono::steady_clock::now();
+
+  for(size_t dev = 0; dev < num_dev; ++dev) {
+    cudaSetDevice(dev);
+    checkCuda(cudaMemcpy(
+      dev_record_W[dev],
+      _h_pinned_weight + dev * num_layers_per_gpu * _pp_wlen,
+      _pp_wsize * num_layers_per_gpu,
+      cudaMemcpyHostToDevice
+    ));
+  }
+  cudaSetDevice(0);
 
   _infer_taskflow(source_Y, source_rowsY, dev_Y, dev_rowsY, dev_W, num_inputs, num_dev, batch_size, batch_ylen, batch_ysize, results);
 

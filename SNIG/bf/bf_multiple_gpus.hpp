@@ -4,8 +4,8 @@
 #include <SNIG/utility/matrix_format.h>
 #include <SNIG/utility/cuda_error.hpp>
 #include <SNIG/utility/scoring.hpp>
+#include <SNIG/bf/kernel.hpp>
 #include <SNIG/utility/utility.hpp>
-#include <SNIG/utility/task.hpp>
 #include <omp.h>
 #include <chrono>
 

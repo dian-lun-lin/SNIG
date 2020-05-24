@@ -320,8 +320,8 @@ void SNIGTaskflow<T>:: _infer_taskflow(
   int* results
 ) const {
   tf::Taskflow taskflow("SNIG");
-  tf::Executor executor;
-  size_t num_cpu = 25;
+  //tf::Executor executor(1, 1);
+  size_t num_cpu = 10;
   size_t num_inner_cpu = 2;
   T* h_Y{nullptr};
 

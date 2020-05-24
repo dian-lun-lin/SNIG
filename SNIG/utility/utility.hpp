@@ -31,4 +31,24 @@ float average_zero_percent_in_non_empty_rows(
 
 };
 
+inline
+void num_nonzero_row_percent(std::vector<size_t>& nerows)
+{
+  std::cout << "\nPerencetage of number of nonzero rows of each GPU : ";
+  size_t total = std::accumulate(nerows.begin(), nerows.end(), 0);
+  for(auto& num : nerows) {
+    std::cout << (100 * (float(num) / total)) << "% ";
+  }
+}
+
+inline
+void num_nonzero_row(std::vector<size_t>& nerows)
+{
+  std::cout << "\nNumber of nonzero rows of each GPU : ";
+  size_t total = std::accumulate(nerows.begin(), nerows.end(), 0);
+  for(auto& num : nerows) {
+    std::cout << num << " ";
+  }
+}
+
 }// end of namespace snig ----------------------------------------------

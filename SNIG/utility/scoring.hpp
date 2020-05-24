@@ -1,9 +1,19 @@
 #pragma once
+#include <thrust/scan.h>
 #include <Eigen/SparseCore>
 #include <Eigen/Dense>
 #include <SNIG/utility/matrix_format.h>
 
 namespace snig {
+
+template<typename T>
+__global__
+void identify(
+  T* target_arr,
+  const size_t batch_size,
+  const size_t num_neurons_per_layer,
+  int* result_arr
+);
 
 template<typename T>
 Eigen::Matrix<int, Eigen::Dynamic, 1> get_score(
@@ -34,6 +44,27 @@ bool is_passed(
 //-----------------------------------------------------------------------------
 //Definition of scoring function
 //-----------------------------------------------------------------------------
+
+template<typename T>
+__global__
+void identify(
+  T* target_arr,
+  const size_t batch_size,
+  const size_t num_neurons_per_layer,
+  int* result_arr
+) {
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  for(int i = tid; i < batch_size; i += gridDim.x * blockDim.x) {
+    T sum = thrust::reduce(
+      thrust::device,
+      target_arr + i * num_neurons_per_layer,
+      target_arr + (i + 1) * num_neurons_per_layer,
+      0,
+      thrust::plus<T>()
+    );
+    result_arr[i] = sum > 0 ? 1 : 0;
+  }
+};
 
 
 template<typename T>
