@@ -55,6 +55,7 @@ int main(int argc, char* argv[]) {
       golden_path, 
       "golden binary file path, default is ../sample_data/MINIST/neuron1024-l120-categories.b"
   );
+  
 
   size_t num_neurons_per_layer = 1024;
   app.add_option(
@@ -77,20 +78,23 @@ int main(int argc, char* argv[]) {
     "bias, default is -0.3"
   );
 
+  // TODO: num + plural: num_gpus
   size_t num_dev = 1;
   app.add_option(
     "-d, --num_device", 
     num_dev,
     "number of GPUs, default is 1"
   );
-
+  
+  // TODO: num_weight_buffers
   size_t num_wb = 2;
   app.add_option(
     "--num_weight_buffer", 
     num_wb,
     "number of weight buffers, default is 2"
   );
-
+  
+  // TODO: batch_size
   size_t num_ibs = 5000;
   app.add_option(
     "--input_batch_size", 

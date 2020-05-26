@@ -1,4 +1,5 @@
 #pragma once
+
 #include <Eigen/Dense>
 #include <Eigen/Core>
 #include <taskflow/taskflow.hpp>
@@ -20,7 +21,11 @@ namespace std {
 
 namespace snig{
 
-
+// TODO: 1. move duplicate code to the method in the base class
+//       2. rename to SNIG
+// 
+// template <typename T>
+// class SNIG : public Base<T> { ... }
 template <typename T>
 class SNIGTaskflow {
 
@@ -31,6 +36,8 @@ class SNIGTaskflow {
   
   private:
     
+    // TODO: move common data members to the base
+
     int* _h_pinned_weight;
     T _bias;
     size_t _num_neurons_per_layer;
@@ -40,7 +47,6 @@ class SNIGTaskflow {
     size_t _COL_BLK;
     size_t _pad {0};
     size_t _N_SLAB;
-
     size_t _p_w_index_len;
     size_t _pp_w_index_len;
     size_t _pp_wlen;
@@ -100,21 +106,25 @@ SNIGTaskflow<T>::SNIGTaskflow(
   _num_neurons_per_layer{num_neurons_per_layer},
   _num_layers{num_layers}
 {
-  std::cout << "Constructing a GPU parallel network.\n";
+  std::cout << "Constructing a GPU parallel network ...\n";
 
   //get tuned shared memory size
   //num_neurons_per_layer must be divisible by shared memory (a.k.a. COL_BLK)
   //only for single GPU
   //only for double float
+
+  // TODO: move this weight loading to a single base method
   cudaDeviceProp props;
   cudaGetDeviceProperties(&props, 0);
+
   size_t max_num_per_block = props.sharedMemPerBlock / sizeof(T);
   if(num_neurons_per_layer <= max_num_per_block) {
     _COL_BLK = num_neurons_per_layer;
   }
   else{
     int max_divisor = 2;
-    while((num_neurons_per_layer % max_divisor != 0) || (max_num_per_block < (num_neurons_per_layer / max_divisor))) {
+    while((num_neurons_per_layer % max_divisor != 0) || 
+          (max_num_per_block < (num_neurons_per_layer / max_divisor))) {
       ++max_divisor;
     }
     _COL_BLK = num_neurons_per_layer / max_divisor;
@@ -141,7 +151,9 @@ SNIGTaskflow<T>::SNIGTaskflow(
   }
 
   _pp_w_index_len = _p_w_index_len + _pad;
+  
 
+  // TODO: remove the single precision exp
   //pad packed weight length
   //half is 2 byte
   //max_nnz should be even, otherwis it needs to be padded
@@ -189,6 +201,7 @@ SNIGTaskflow<T>::~SNIGTaskflow() {
   checkCuda(cudaFreeHost(_h_pinned_weight));
 }
 
+// TODO: move all shared accessors to the base
 template <typename T>
 size_t SNIGTaskflow<T>::num_neurons_per_layer() const {
    return _num_neurons_per_layer; 
@@ -207,6 +220,10 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> SNIGTaskflow<T>::infer(
   const size_t num_buff,
   const size_t num_dev
 ) const {
+
+  // TODO: use the base logging method
+  // log("preprocessing ...", std::flush);
+
   std::cout << "Preprocessing.............................." << std::flush;
   auto pp_beg = std::chrono::steady_clock::now();
 
@@ -330,6 +347,8 @@ void SNIGTaskflow<T>:: _infer_taskflow(
   std::vector<int*> dev_results(num_dev, nullptr);
 
   dim3 grid_dim(batch_size, _N_SLAB, 1);
+
+  // TODO: move to base?
   dim3 block_dim(2, 512, 1);
 
   tf::Task start = taskflow.emplace([](){
@@ -391,6 +410,8 @@ void SNIGTaskflow<T>:: _infer_taskflow(
           ).name("Inference"));
         }
       }
+
+      // TODO: consider parameterizing the thread numbers
       tf::cudaTask ident = cf.kernel(16, 512, 0, identify<T>, dev_Y[dev][0], batch_size, _num_neurons_per_layer, dev_results[dev]);
 
       //dependencies of cudaflow
