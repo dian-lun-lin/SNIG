@@ -3,11 +3,29 @@ cmake_minimum_required (VERSION 3.9)
 MESSAGE(STATUS "CMAKE_ROOT: " ${CMAKE_ROOT})
 
 # Project name
-project(SNIG VERSION 1.0.0 LANGUAGES CXX)
+project(SNIG VERSION 1.0.0 LANGUAGES CXX CUDA)
 
 # Turn on the verbose
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
+# defult release build
+set(SNIG_DEFAULT_BUILD_TYPE "Release")
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  message(STATUS "Setting build type to '${SNIG_DEFAULT_BUILD_TYPE}'")
+  set(
+    CMAKE_BUILD_TYPE "${SNIG_DEFAULT_BUILD_TYPE}" 
+    CACHE
+    STRING "Choose the type of build." 
+    FORCE
+  )
+  # Set the possible values of build type for cmake-gui
+  set_property(
+    CACHE 
+    CMAKE_BUILD_TYPE 
+    PROPERTY STRINGS
+    "Debug" "Release"
+  )
+endif()
 
 #not test yet
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
@@ -32,39 +50,41 @@ set(SDNN_3RD_PARTY_DIR ${PROJECT_SOURCE_DIR}/3rd-party)
 include(CTest)
 
 #compiler setting 
-add_library(error_settings INTERFACE)
-add_library(sparse_dnn::error_settings ALIAS error_settings)
+#add_library(error_settings INTERFACE)
+#add_library(snig::error_settings ALIAS error_settings)
 
-target_compile_options(
-  error_settings
-  INTERFACE
-  $<$<CXX_COMPILER_ID:Clang>:-Wall -Wextra -Wfatal-errors>
-  $<$<CXX_COMPILER_ID:GNU>:-Wall -Wextra -Wfatal-errors>
-  $<$<COMPILE_LANGUAGE:CUDA>: -lineinfo>
-)
+#target_compile_options(
+  #error_settings
+  #INTERFACE
+  #$<$<COMPILE_LANGUAGE:Clang>:-Wall -Wextra -Wfatal-errors>
+  #$<$<COMPILE_LANGUAGE:GNU>:-Wall -Wextra -Wfatal-errors>
+#)
 
-#optmization
-add_library(optimize_settings INTERFACE)
-add_library(sparse_dnn::optimize_settings ALIAS optimize_settings)
+##optmization
+#add_library(optimize_settings INTERFACE)
+#add_library(snig::optimize_settings ALIAS optimize_settings)
 
-target_compile_options(
-  optimize_settings INTERFACE
-  $<$<AND:$<CONFIG:Release>,$<CXX_COMPILER_ID:Clang>>:-O2 -march=native>
-  $<$<AND:$<CONFIG:Release>,$<CXX_COMPILER_ID:GNU>>:-O2 -march=native>
-  $<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CUDA>>:-O2 -march=native>
-  $<$<AND:$<CONFIG:Debug>,$<CXX_COMPILER_ID:GNU>>:-O0 -g>
-  $<$<AND:$<CONFIG:Debug>,$<CXX_COMPILER_ID:Clang>>:-O0 -g>
-  $<$<AND:$<CONFIG:Debug>,$<COMPILE_LANGUAGE:CUDA>>:-O0 -g -G>
-)
+#target_compile_options(
+  #optimize_settings INTERFACE
+  #$<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:Clang>>:-O2 -march=native>
+  #$<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:GNU>>:-O2 -march=native>
+  #$<$<AND:$<CONFIG:Debug>,$<COMPILE_LANGUAGE:Clang>>:-O0 -g>
+  #$<$<AND:$<CONFIG:Debug>,$<COMPILE_LANGUAGE:GNU>>:-O0 -g>
+#)
+#set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}" "-Wall -Wextra -Wfatal-errors")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}" "-O2 -march=native")
+set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS}" "-Xcompiler -fopenmp " )
+set(CUDA_NVCC_FLAGS_DEBUG "${CUDA_NVCC_FLAGS_DEBUG}" "-lineinfo")
+set(CUDA_NVCC_FLAGS_RELEASE "${CUDA_NVCC_FLAGS_RELEASE}" "-O2 -w ")
 
 #default
 add_library(default_settings INTERFACE)
-add_library(sparse_dnn::default_settings ALIAS default_settings)
+add_library(snig::default_settings ALIAS default_settings)
 target_link_libraries(
   default_settings 
   INTERFACE 
-  sparse_dnn::error_settings 
-  sparse_dnn::optimize_settings 
+  snig::error_settings 
+  snig::optimize_settings 
 )
 
 
@@ -144,22 +164,31 @@ target_include_directories(${PROJECT_NAME} INTERFACE
 
 #endif()
 
+
+#find -arch
+include(FindCUDA)
+set(CUDA_ARCH_LIST Auto CACHE STRING
+    "List of CUDA architectures (e.g. Pascal, Volta, etc) or \
+compute capability versions (6.1, 7.0, etc) to generate code for. \
+Set to Auto for automatic detection (default)."
+)
+cuda_select_nvcc_arch_flags(CUDA_ARCH_FLAGS ${CUDA_ARCH_LIST})
+list(APPEND CUDA_NVCC_FLAGS ${CUDA_ARCH_FLAGS})
+
 # add executables
 message(STATUS "building executables ...")
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
-set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS}" "-lineinfo -arch=sm_75 \ -gencode=arch=compute_75,code=compute_75 -Xcompiler -fopenmp" )
 
 cuda_add_executable(main_cuda ${PROJECT_SOURCE_DIR}/main/main.cu)
-target_link_libraries(main_cuda stdc++fs cusparse OpenMP::OpenMP_CXX sparse_dnn::default_settings)
+target_link_libraries(main_cuda ${PROJECT_NAME} stdc++fs OpenMP::OpenMP_CXX)
 
-#cuda_add_executable(diagonal_to_binary ${PROJECT_SOURCE_DIR}/main/diagonal_to_binary.cu)
-#target_link_libraries(diagonal_to_binary ${PROJECT_NAME} stdc++fs sparse_dnn::default_settings)
 
-cuda_add_executable(tsv_file_to_binary ${PROJECT_SOURCE_DIR}/main/tsv_file_to_binary.cu)
-target_link_libraries(tsv_file_to_binary ${PROJECT_NAME} stdc++fs sparse_dnn::default_settings)
+#cuda_add_executable(tsv_file_to_binary ${PROJECT_SOURCE_DIR}/main/tsv_file_to_binary.cu)
+#target_link_libraries(tsv_file_to_binary ${PROJECT_NAME} stdc++fs)
 
 #CPU parallel. Not support yet.
-#add_executable(main ${PROJECT_SOURCE_DIR}/main/main.cpp)
-#target_link_libraries(main ${PROJECT_NAME} Threads::Threads stdc++fs sparse_dnn::default_settings)
+#cuda_add_executable(diagonal_to_binary ${PROJECT_SOURCE_DIR}/main/diagonal_to_binary.cu)
+#target_link_libraries(diagonal_to_binary ${PROJECT_NAME} stdc++fs snig::default_settings)
+#target_link_libraries(main ${PROJECT_NAME} Threads::Threads stdc++fs snig::default_settings)
 
