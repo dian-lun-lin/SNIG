@@ -1,14 +1,12 @@
 #pragma once
-#include <Eigen/Dense>
+
 #include <Eigen/Core>
-#include <taskflow/taskflow.hpp>
 #include <SNIG/utility/reader.hpp>
 #include <SNIG/utility/matrix_format.h>
 #include <SNIG/utility/cuda_error.hpp>
 #include <SNIG/snig/kernel.hpp>
 #include <SNIG/utility/scoring.hpp>
 #include <SNIG/base/base.hpp>
-#include <chrono>
 #include <vector>
 #include <queue>
 #include <mutex>
@@ -65,6 +63,7 @@ class SNIGPipeline : public Base<T> {
   public:
 
     SNIGPipeline(
+      const dim3& threads,
       const std::fs::path& weight_path,
       const T bias = -.3f,
       const size_t num_neurons_per_layer = 1024,
@@ -88,12 +87,13 @@ class SNIGPipeline : public Base<T> {
 
 template <typename T>
 SNIGPipeline<T>::SNIGPipeline(
+  const dim3& threads,
   const std::fs::path& weight_path,
   const T bias,
   const size_t num_neurons_per_layer,
   const size_t num_layers
 ):
-  Base<T>(weight_path, bias, num_neurons_per_layer, num_layers)
+  Base<T>(threads, weight_path, bias, num_neurons_per_layer, num_layers)
 {
   Base<T>::log("Constructing SNIG engine using pipeline method......", "\n");
 }
@@ -204,7 +204,6 @@ void SNIGPipeline<T>::_infer() {
   dev_start_batch[0] = std::move(first_dev_que);
 
   dim3 grid_dim(_batch_size, Base<T>::_num_secs, 1);
-  dim3 block_dim(2, 512, 1);
 
   #pragma omp parallel num_threads(Base<T>::_num_gpus)
   {
@@ -254,7 +253,7 @@ void SNIGPipeline<T>::_infer() {
         int* colsw = _dev_W[cur_layer] + Base<T>::_num_neurons * Base<T>::_num_secs + 1;
         T* valsw = (T*)(_dev_W[cur_layer] + Base<T>::_p_w_index_len);
 
-        snig_inference<T><<<grid_dim, block_dim, sizeof(T) * Base<T>::_sec_size, infer_stream>>>(
+        snig_inference<T><<<grid_dim, Base<T>::_threads, sizeof(T) * Base<T>::_sec_size, infer_stream>>>(
           _dev_Y[dev][cur_layer % 2],
           _dev_is_nonzero_row[dev][cur_layer % 2],
           Base<T>::_sec_size,

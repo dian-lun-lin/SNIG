@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Eigen/Dense>
 #include <Eigen/Core>
 #include <taskflow/taskflow.hpp>
 #include <SNIG/utility/reader.hpp>
@@ -9,12 +8,7 @@
 #include <SNIG/snig/kernel.hpp>
 #include <SNIG/utility/scoring.hpp>
 #include <SNIG/base/base.hpp>
-#include <chrono>
 #include <vector>
-#include <queue>
-#include <mutex>
-#include <tuple>
-#include <thread>
 
 namespace std {
   namespace fs = experimental::filesystem;  
@@ -64,6 +58,7 @@ class SNIG : public Base<T> {
   public:
 
     SNIG(
+      const dim3& threads,
       const std::fs::path& weight_path,
       const T bias = -.3f,
       const size_t num_neurons_per_layer = 1024,
@@ -88,12 +83,13 @@ class SNIG : public Base<T> {
 
 template <typename T>
 SNIG<T>::SNIG(
+  const dim3& threads,
   const std::fs::path& weight_path,
   const T bias,
   const size_t num_neurons_per_layer,
   const size_t num_layers
 ):
-  Base<T>(weight_path, bias, num_neurons_per_layer, num_layers)
+  Base<T>(threads, weight_path, bias, num_neurons_per_layer, num_layers)
 {
   Base<T>::log("Constructing SNIG engine......", "\n");
 }
@@ -201,9 +197,6 @@ void SNIG<T>::_infer() {
 
   dim3 grid_dim(_batch_size, Base<T>::_num_secs, 1);
 
-  // TODO: move to base?
-  dim3 block_dim(2, 512, 1);
-
   tf::Task start = taskflow.emplace([](){
   }).name("start");
 
@@ -240,13 +233,13 @@ void SNIG<T>::_infer() {
             Base<T>::_pp_wlen
           ).name("weight_copy"));
 
-          // transformed CSC weight matrix equals to CSR
+          // transformed CSC weight matrix equals to CSR with exchanged row and col
           int* col_w = _dev_W[dev][k];
           int* row_w = _dev_W[dev][k] + Base<T>::_num_neurons * Base<T>::_num_secs + 1;
           T* val_w = (T*)(_dev_W[dev][k] + Base<T>::_p_w_index_len);
           infers.emplace_back(cf.kernel(
             grid_dim,
-            block_dim,
+            Base<T>::_threads,
             sizeof(T) * Base<T>::_sec_size,
             snig_inference<T>,
             _dev_Y[dev][k % 2],
