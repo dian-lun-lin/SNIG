@@ -184,8 +184,8 @@ cuda_add_executable(main_cuda ${PROJECT_SOURCE_DIR}/main/main.cu)
 target_link_libraries(main_cuda ${PROJECT_NAME} stdc++fs OpenMP::OpenMP_CXX)
 
 
-#cuda_add_executable(tsv_file_to_binary ${PROJECT_SOURCE_DIR}/main/tsv_file_to_binary.cu)
-#target_link_libraries(tsv_file_to_binary ${PROJECT_NAME} stdc++fs)
+cuda_add_executable(tsv_file_to_binary ${PROJECT_SOURCE_DIR}/main/tsv_file_to_binary.cu)
+target_link_libraries(tsv_file_to_binary ${PROJECT_NAME} stdc++fs)
 
 #CPU parallel. Not support yet.
 #cuda_add_executable(diagonal_to_binary ${PROJECT_SOURCE_DIR}/main/diagonal_to_binary.cu)
