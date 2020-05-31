@@ -180,11 +180,11 @@ message(STATUS "building executables ...")
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
 
-cuda_add_executable(main_cuda ${PROJECT_SOURCE_DIR}/main/main.cu)
-target_link_libraries(SNIG ${PROJECT_NAME} stdc++fs OpenMP::OpenMP_CXX)
+cuda_add_executable(snig ${PROJECT_SOURCE_DIR}/main/main.cu)
+target_link_libraries(snig ${PROJECT_NAME} stdc++fs OpenMP::OpenMP_CXX)
 
 
-cuda_add_executable(tsv_file_to_binary ${PROJECT_SOURCE_DIR}/main/tsv_file_to_binary.cu)
+cuda_add_executable(to_binary ${PROJECT_SOURCE_DIR}/main/tsv_file_to_binary.cu)
 target_link_libraries(to_binary ${PROJECT_NAME} stdc++fs)
 
 #CPU parallel. Not support yet.

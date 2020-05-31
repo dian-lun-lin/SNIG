@@ -48,7 +48,7 @@ get_command() {
   threads_dim2=${9:-${default_threads[2]}}
 
   get_bias $num_neurons
-  ./main_cuda -m $mode -w ../dataset/weight/neuron$num_neurons/ --num_neurons $num_neurons --num_layers $num_layers --input ../dataset/MNIST/sparse-images-$num_neurons.b --golden ../dataset/MNIST/neuron$num_neurons-l$num_layers-categories.b --bias $bias --num_gpus $num_gpus --input_batch_size $input_batch_size --num_weight_buffers $num_weight_buffers -t $threads_dim0 $threads_dim1 $threads_dim2 
+  ./snig -m $mode -w ../dataset/weight/neuron$num_neurons/ --num_neurons $num_neurons --num_layers $num_layers --input ../dataset/MNIST/sparse-images-$num_neurons.b --golden ../dataset/MNIST/neuron$num_neurons-l$num_layers-categories.b --bias $bias --num_gpus $num_gpus --input_batch_size $input_batch_size --num_weight_buffers $num_weight_buffers -t $threads_dim0 $threads_dim1 $threads_dim2 
 
 }
 
