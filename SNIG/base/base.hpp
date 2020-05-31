@@ -1,9 +1,9 @@
 #pragma once
+
 #include <SNIG/utility/utility.hpp>
+#include <chrono>
 
 namespace snig {
-
-//TODO:
 
 template <typename T>
 class Base {
@@ -32,7 +32,11 @@ class Base {
     size_t _pp_wlen;
     size_t _pp_wsize;
 
+    //kernel configuration
+    dim3 _threads{32, 32, 1};
+
     Base(
+      const dim3& threads,
       const std::fs::path& weight_path,
       const T bias,
       const size_t num_neurons,
@@ -54,15 +58,12 @@ class Base {
     
     auto duration();
 
-
-    // TODO: consider parameterizing the kernel thread configuration
-    
   private:
 
     std::chrono::time_point<std::chrono::steady_clock> _tic;
     std::chrono::time_point<std::chrono::steady_clock> _toc;
-    bool _enable_counter = false;
-    bool _enable_toc = false;
+    bool _enable_counter{false};
+    bool _enable_toc{false};
 
     void _load_weight(const std::fs::path& weight_path); 
 
@@ -76,6 +77,16 @@ class Base {
 
     size_t num_layers() const;
 
+    virtual void _preprocess(const std::fs::path& input_path) = 0;
+    
+    virtual void _weight_alloc() = 0;
+
+    virtual void _input_alloc() = 0;
+
+    virtual void _result_alloc() = 0;
+
+    virtual void _infer() = 0;
+
 
 };
 
@@ -85,6 +96,7 @@ class Base {
 
 template <typename T>
 Base<T>::Base(
+  const dim3& threads,
   const std::fs::path& weight_path,
   const T bias,
   const size_t num_neurons,
@@ -92,7 +104,8 @@ Base<T>::Base(
 ) : 
   _bias{bias},
   _num_neurons{num_neurons},
-  _num_layers{num_layers}
+  _num_layers{num_layers},
+  _threads{threads}
 {
   _sec_size = get_sec_size<T>(Base<T>::_num_neurons);
   _num_secs = (Base<T>::_num_neurons) / _sec_size;

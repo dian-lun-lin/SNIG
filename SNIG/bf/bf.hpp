@@ -1,5 +1,5 @@
 #pragma once
-#include <Eigen/Dense>
+#include <Eigen/Core>
 #include <SNIG/utility/reader.hpp>
 #include <SNIG/utility/matrix_format.h>
 #include <SNIG/utility/cuda_error.hpp>
@@ -8,7 +8,6 @@
 #include <SNIG/utility/utility.hpp>
 #include <SNIG/base/base.hpp>
 #include <omp.h>
-#include <chrono>
 
 namespace std {
   namespace fs = experimental::filesystem;  
@@ -69,6 +68,7 @@ class BF : public Base<T> {
   public:
 
     BF(
+      const dim3& threads,
       const std::fs::path& weight_path,
       const T bias = -.3f,
       const size_t num_neurons_per_layer = 1024,
@@ -91,12 +91,13 @@ class BF : public Base<T> {
 
 template <typename T>
 BF<T>::BF(
+  const dim3& threads,
   const std::fs::path& weight_path,
   const T bias,
   const size_t num_neurons,
   const size_t num_layers
 ):
-  Base<T>(weight_path, bias, num_neurons, num_layers)
+  Base<T>(threads, weight_path, bias, num_neurons, num_layers)
 {
   Base<T>::log("Constructing BF method......", "\n");
 }
@@ -194,8 +195,6 @@ void BF<T>::_infer() {
     dev_stream.emplace_back(stream);
   }
 
-  dim3 threads(2, 512, 1);
-
   #pragma omp parallel num_threads(Base<T>::_num_gpus)
   {
     int dev = omp_get_thread_num(); 
@@ -217,7 +216,7 @@ void BF<T>::_infer() {
       int* colsw = _dev_W[dev][cur_layer % 2] + Base<T>::_num_neurons * Base<T>::_num_secs + 1;
       T* valsw = (T*)(_dev_W[dev][cur_layer % 2] + Base<T>::_p_w_index_len);
 
-      bf_inference<T><<<_dev_nerowsY[dev], threads, sizeof(T) * Base<T>::_sec_size, dev_stream[dev][1]>>>(
+      bf_inference<T><<<_dev_nerowsY[dev], Base<T>::_threads, sizeof(T) * Base<T>::_sec_size, dev_stream[dev][1]>>>(
         _dev_Y[dev][cur_layer % 2],
         _dev_nerowsY[dev],
         _dev_rowsY[dev][cur_layer % 2],

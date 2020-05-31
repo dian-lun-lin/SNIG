@@ -1,8 +1,10 @@
-#usage: $1 select mode(BF_one_gpu, BF_one_gpu_cudagraph, BF_multiple_gpus, SNIG_cudagraph, or SNIG_taskflow), default is BF_one_gpu"
-#       $2 neurons_per_layer
+#usage: $1 mode (BF,  SNIG, or SNIG_pipeline), default is SNIG"
+#       $2 num_neurons
 #       $3 num_layers
-#       $4 num_device
-#       $5 is_test_data 0, 1
+#       $4 num_gpus
+#       $5 batch_size
+#       $6 num_weight_buffers
+#       $7, $8, $9 thread_dimension
 
 get_bias() {
 
@@ -21,24 +23,33 @@ get_bias() {
 
 
 get_command() {
-  get_bias $2
-  if [[ $5 == 1 ]]; then
-    if [[ "$1" == "CPU_parallel" || "$1" == "sequential" ]]; then
-         ./main -m $1 -w ../dataset/weight/neuron$2/ --num_neurons_per_layer $2 --num_layers $3 --input ../dataset/MNIST/sparse-images-$2.b --golden ../dataset/MNIST/neuron$2-l$3-categories.b --bias $bias
-    else
-         ./main_cuda -m $1 -w ../dataset/test/weight/neuron$2/ --num_neurons_per_layer $2 --num_layers $3 --input ../dataset/test/MNIST/sparse-images-$2.b --golden ../dataset/test/MNIST/neuron$2-l$3-categories.b --bias $bias --num_gpus $4
 
-    fi
-
-  else
-    if [[ "$1" == "CPU_parallel" || "$1" == "sequential" ]]; then
-         ./main -m $1 -w ../dataset/weight/neuron$2/ --num_neurons_per_layer $2 --num_layers $3 --input ../dataset/MNIST/sparse-images-$2.b --golden ../dataset/MNIST/neuron$2-l$3-categories.b --bias $bias
-    else
-         ./main_cuda -m $1 -w ../dataset/weight/neuron$2/ --num_neurons_per_layer $2 --num_layers $3 --input ../dataset/MNIST/sparse-images-$2.b --golden ../dataset/MNIST/neuron$2-l$3-categories.b --bias $bias --num_gpus $4
-
-    fi
-    
+  if [[ "$1" == "-h" ]]; then
+    echo "usage : ./excuator -mode -num_neurons -num_layers -num_gpus -input_batch_size -num_weight_buffers -thread_dimension"
+    exit
   fi
+
+  default_mode="SNIG"
+  default_num_neurons=1024
+  default_layers=120
+  default_num_gpus=1
+  default_input_batch_size=5000
+  default_num_weight_buffers=2
+  default_threads=(2 512 1)
+
+  mode=${1:-$default_mode}
+  num_neurons=${2:-$default_num_neurons}
+  num_layers=${3:-$default_layers}
+  num_gpus=${4:-$default_num_gpus}
+  input_batch_size=${5:-$default_input_batch_size}
+  num_weight_buffers=${6:-$default_num_weight_buffers}
+  threads_dim0=${7:-${default_threads[0]}}
+  threads_dim1=${8:-${default_threads[1]}}
+  threads_dim2=${9:-${default_threads[2]}}
+
+  get_bias $num_neurons
+  ./main_cuda -m $mode -w ../dataset/weight/neuron$num_neurons/ --num_neurons $num_neurons --num_layers $num_layers --input ../dataset/MNIST/sparse-images-$num_neurons.b --golden ../dataset/MNIST/neuron$num_neurons-l$num_layers-categories.b --bias $bias --num_gpus $num_gpus --input_batch_size $input_batch_size --num_weight_buffers $num_weight_buffers -t $threads_dim0 $threads_dim1 $threads_dim2 
+
 }
 
-get_command $1 $2 $3 $4 $5
+get_command $1 $2 $3 $4 $5 $6 $7 $8 $9
