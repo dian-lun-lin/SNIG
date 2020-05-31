@@ -26,7 +26,7 @@ get_command() {
     if [[ "$1" == "CPU_parallel" || "$1" == "sequential" ]]; then
          ./main -m $1 -w ../dataset/weight/neuron$2/ --num_neurons_per_layer $2 --num_layers $3 --input ../dataset/MNIST/sparse-images-$2.b --golden ../dataset/MNIST/neuron$2-l$3-categories.b --bias $bias
     else
-         ./main_cuda -m $1 -w ../dataset/test/weight/neuron$2/ --num_neurons_per_layer $2 --num_layers $3 --input ../dataset/test/MNIST/sparse-images-$2.b --golden ../dataset/test/MNIST/neuron$2-l$3-categories.b --bias $bias --num_device $4
+         ./main_cuda -m $1 -w ../dataset/test/weight/neuron$2/ --num_neurons_per_layer $2 --num_layers $3 --input ../dataset/test/MNIST/sparse-images-$2.b --golden ../dataset/test/MNIST/neuron$2-l$3-categories.b --bias $bias --num_gpus $4
 
     fi
 
@@ -34,7 +34,7 @@ get_command() {
     if [[ "$1" == "CPU_parallel" || "$1" == "sequential" ]]; then
          ./main -m $1 -w ../dataset/weight/neuron$2/ --num_neurons_per_layer $2 --num_layers $3 --input ../dataset/MNIST/sparse-images-$2.b --golden ../dataset/MNIST/neuron$2-l$3-categories.b --bias $bias
     else
-         ./main_cuda -m $1 -w ../dataset/weight/neuron$2/ --num_neurons_per_layer $2 --num_layers $3 --input ../dataset/MNIST/sparse-images-$2.b --golden ../dataset/MNIST/neuron$2-l$3-categories.b --bias $bias --num_device $4
+         ./main_cuda -m $1 -w ../dataset/weight/neuron$2/ --num_neurons_per_layer $2 --num_layers $3 --input ../dataset/MNIST/sparse-images-$2.b --golden ../dataset/MNIST/neuron$2-l$3-categories.b --bias $bias --num_gpus $4
 
     fi
     

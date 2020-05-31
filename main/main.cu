@@ -16,9 +16,9 @@ int main(int argc, char* argv[]) {
   //        --num_neurons_per_layer(-n)  :  number of neurons 1024, 4096, 16384, or 65536
   //        --num_layers(-l)             :  number of layers 120, 480, or 1920
   //        --bias(-b)                   :  bias
-  //        --num_device(-d)             :  number of device 1, 2, 3, 4, ...
+  //        --num_gpus                   :  number of GPUs 1, 2, 3, 4, ...
   //        --input_batch_size           :  input batch size
-  //        --num_weight_buffer          :  number of weight buffers, must be even and factor of 120
+  //        --num_weight_buffers         :  number of weight buffers, must be even and factor of 120
 
   //example1:  
   //        ./main_cu
@@ -78,27 +78,24 @@ int main(int argc, char* argv[]) {
     "bias, default is -0.3"
   );
 
-  // TODO: num + plural: num_gpus
-  size_t num_dev = 1;
+  size_t num_gpus = 1;
   app.add_option(
-    "-d, --num_device", 
-    num_dev,
+    "--num_gpus", 
+    num_gpus,
     "number of GPUs, default is 1"
   );
   
-  // TODO: num_weight_buffers
-  size_t num_wb = 2;
+  size_t num_weight_buffers = 2;
   app.add_option(
-    "--num_weight_buffer", 
-    num_wb,
+    "--num_weight_buffers", 
+    num_weight_buffers,
     "number of weight buffers, default is 2"
   );
   
-  // TODO: batch_size
-  size_t num_ibs = 5000;
+  size_t batch_size = 5000;
   app.add_option(
     "--input_batch_size", 
-    num_ibs,
+    batch_size,
     "number of input bath size, default is 5000"
   );
 
@@ -107,13 +104,13 @@ int main(int argc, char* argv[]) {
   std::cout << "Current mode: " << mode << std::endl;
 
   if(mode == "SNIG") {
-    snig::SNIGTaskflow<float> snig(
+    snig::SNIG<float> snig(
       weight_path, 
       bias,
       num_neurons_per_layer, 
       num_layers
     );
-    result = snig.infer(input_path, 60000, num_ibs, num_wb, num_dev);
+    result = snig.infer(input_path, 60000, batch_size, num_weight_buffers, num_gpus);
   }
   else if(mode == "SNIG_pipeline") {
     snig::SNIGPipeline<float> snig_pipeline(
@@ -122,26 +119,17 @@ int main(int argc, char* argv[]) {
       num_neurons_per_layer, 
       num_layers
     );
-    result = snig_pipeline.infer(input_path, 60000, num_ibs, num_dev);
+    result = snig_pipeline.infer(input_path, 60000, batch_size, num_gpus);
   }
-  else if(mode == "BF_one_gpu") {
-    snig::BFOneGpu<float> bf_one(
-      weight_path, 
-      bias,
-      num_neurons_per_layer, 
-      num_layers
-    );
-    result = bf_one.infer(input_path, 60000);
-  }
-  else if(mode == "BF_multiple_gpus") {
+  else if(mode == "BF") {
     //only perform initial partition since we don't have NVLink 
-    snig::BFMultiGpu<float> bf_multi(
+    snig::BF<float> bf(
       weight_path, 
       bias,
       num_neurons_per_layer, 
       num_layers
     );
-    result = bf_multi.infer(input_path, 60000, num_dev);
+    result = bf.infer(input_path, 60000, num_gpus);
   }
   else {
     using namespace std::literals::string_literals;

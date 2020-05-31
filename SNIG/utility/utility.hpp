@@ -4,6 +4,9 @@
 
 namespace snig {
 
+template<typename T>
+size_t get_sec_size(const size_t num_neurons);
+
 inline
 float average_zero_percent_in_non_empty_rows(
   int* rlenY,
@@ -12,9 +15,42 @@ float average_zero_percent_in_non_empty_rows(
   size_t nerowsY
 );
 
+inline
+void num_nonzero_row_percent(std::vector<size_t>& nerows);
+
+inline
+void num_nonzero_row(std::vector<size_t>& nerows);
+
 //-----------------------------------------------------------------------------
 //Definition of utility function
 //-----------------------------------------------------------------------------
+
+template<typename T>
+size_t get_sec_size(const size_t num_neurons) {
+
+  //only for the same GPUs
+  //
+  //get tuned shared memory size
+  //num_neurons must be divisible by shared memory (a.k.a. sec_size)
+  //only for double float
+  cudaDeviceProp props;
+  cudaGetDeviceProperties(&props, 0);
+  size_t sec_size{0};
+
+  size_t max_num_per_block = props.sharedMemPerBlock / sizeof(T);
+  if(num_neurons <= max_num_per_block) {
+    sec_size = num_neurons;
+  }
+  else{
+    int max_divisor = 2;
+    while((num_neurons % max_divisor != 0) || 
+          (max_num_per_block < (num_neurons / max_divisor))) {
+      ++max_divisor;
+    }
+    sec_size = num_neurons / max_divisor;
+  }
+  return sec_size;
+}
 
 inline
 float average_zero_percent_in_non_empty_rows(
