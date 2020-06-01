@@ -1,6 +1,10 @@
-# SNIG
+<img src="./.others/snig_logo.png" />
 
 Accelerated Large Sparse Neural Network Inference using Task Graph Parallelism 
+
+<p align=center>
+<img src="./.others/snig_taskgraph.png" width="750" height="250"/>
+</p>
 
 # Problem Statement
 
