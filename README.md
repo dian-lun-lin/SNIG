@@ -20,7 +20,7 @@ To run SNIG with smallest benchmark under 1 GPU, you can simply type :
 
 ```
 cd bin/
-~$ ./to_binary
+~$ ./to_binary --sample_data true
 ~$ ./snig
 ```
 
@@ -30,10 +30,16 @@ To run other benchmarks, you need to download the dataset from MIT/IEEE/Amazon G
 
 The dataset is available at https://graphchallenge.mit.edu/data-sets
 
+First, create directories to store the dataset :
+```
+~$ mkdir ./dataset
+~$ mkdir ./dataset/MNIST
+~$ mkdir ./dataset/weight
+```
 After downloading and extracting the dataset, 
-you need to move the input dataset and golden reference to ```./dataset/MNIST``` and the model to ```./dataset/weight/```
+you need to move the input dataset and golden reference to ```./dataset/MNIST``` and the model to ```./dataset/weight/```, respectively.
 
-The file paths would be like:
+The file paths should be like :
 
 ```
 ./dataset/weight/neuron1024/{tsv files}
@@ -41,15 +47,27 @@ The file paths would be like:
 ./dataset/MNIST/sparse-images-1024.tsv
 ```
 
-
-
-
-
 ## Transform the Input Dataset to Binary Format
 
 Computing the raw dataset is extremely time-consuming.
 To execute SNIG, you need to transform the input dataset to binary format first.
+Make sure all the data is stored in ```./dataset```
 
+First, 
+``` 
+  cd bin/ 
+```
+To convert one bencmark :
+```
+~$ ./bin/to_binary --num_neurons --num_layers
+```
+For example, ``` ~$ ./bin/to_binary 16384 1920 ``` would convert benchmark with 16384 neurons and 1920 layers to binary file
+
+To convert all benchmarks :
+```
+~$ ./bin/to_binary --conver_all true
+```
+Note that converting all benchmarks would take some time.
 
 ## Run SNIG on a Specific Benchmark
 
