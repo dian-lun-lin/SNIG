@@ -25,7 +25,7 @@ You will see executable files ('snig' and 'to_binary') under `bin/`.
 To run SNIG with the smallest benchmark under 1 GPU, you can simply type :
 
 ```bash
-cd bin
+~$ cd bin
 ~$ ./to_binary --sample_data true
 ~$ ./snig
 ```
@@ -34,13 +34,6 @@ To run other benchmarks, you need to download the dataset from MIT/IEEE/Amazon G
 
 # Step 2: Download the Dataset
 
-First, create directories to store the dataset :
-
-```bash
-~$ mkdir ./dataset
-~$ mkdir ./dataset/MNIST
-~$ mkdir ./dataset/weight
-```
 You can download the dataset either by yourself or by using our script.
 ## Download the dataset by our script (Linux):
 ```bash
@@ -56,8 +49,16 @@ Note that this script may fail to get the dataset due to various environment.
 ## Download the dataset manually :
 The dataset is available at https://graphchallenge.mit.edu/data-sets
 
+Firstly, create directories to store the dataset :
+
+```bash
+~$ mkdir dataset
+~$ mkdir dataset/MNIST
+~$ mkdir dataset/weight
+```
+
 After downloading and extracting the dataset, 
-you need to move the input dataset and golden reference to ```./dataset/MNIST``` and the model to ```./dataset/weight/```, respectively.
+you need to move the input dataset and golden reference to ```dataset/MNIST/``` and the model to ```dataset/weight/```, respectively.
 
 The file paths should be like :
 
@@ -71,7 +72,7 @@ The file paths should be like :
 
 Computing the raw dataset is extremely time-consuming.
 To execute SNIG, you need to transform the benchmarks to binary format first.
-**Make sure the benchmark (model, input data, golden reference) you want to transform is already stored in** ```./dataset```.
+**Make sure the benchmark (model, input data, golden reference) you want to transform is already stored in** ```dataset/```.
  
 ``` bash
 ~$ cd bin
@@ -80,13 +81,14 @@ To execute SNIG, you need to transform the benchmarks to binary format first.
 "./to_binary --num_neurons 16384"  would convert benchmarks with 16384 neurons to binary format
 "./to_binary --convert_all true" would convert all benchmarks to format
 ```
-Check ``` ~$ ./to_binary -h``` for more details.
 Note that converting all benchmarks would take some time.
+Check ``` ~$ ./to_binary -h``` for more details.
+
 
 # Step 4 : Run SNIG on a Specific Benchmark
 Firstly, 
 ```bash
-  cd bin
+~$ cd bin
 ```
 
 You can use either ```~$ ./snig ``` for setting details or our srcipt ```~$ ./executor.sh``` with tuned parameters.
