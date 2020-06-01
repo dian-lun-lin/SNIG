@@ -25,7 +25,10 @@ get_bias() {
 get_command() {
 
   if [[ "$1" == "-h" ]]; then
-    echo "usage : ./excuator -mode -num_neurons -num_layers -num_gpus -input_batch_size -num_weight_buffers -thread_dimension"
+    echo "usage : ./excuator.sh mode num_neurons num_layers num_gpus input_batch_size num_weight_buffers thread_dimension"
+    echo ""
+    echo "\"./executor.sh SNIG 65536 1920 4\" use SNIG to peform the benchmark with 65536 neurons and 1920 layers under 4 GPUs"
+    echo "\"./executor.sh BF 4096 1920 2\" use BF to perform the benchmark with 4096 neurons and 1920 layers under 2 GPUs"
     exit
   fi
 

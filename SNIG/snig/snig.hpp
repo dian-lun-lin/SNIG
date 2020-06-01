@@ -123,6 +123,11 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> SNIG<T>::infer(
   const size_t num_weight_buffers,
   const size_t num_gpus
 ) {
+  
+  Base<T>::log("Using ", num_gpus, " GPUs", "\n");
+  Base<T>::log("Total input size : ", num_inputs, "\n");
+  Base<T>::log("Input batch size : ", batch_size, "\n");
+  Base<T>::log("Number of weight buffers : ", num_weight_buffers, "\n\n");
 
   _set_parameters(
     num_inputs,

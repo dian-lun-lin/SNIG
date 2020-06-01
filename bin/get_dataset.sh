@@ -7,9 +7,9 @@ normal=$(tput sgr0)
 get_command() {
   # help message
   if [[ "$1" == "-h" ]]; then
-    echo "usage : ./get_dataset (num_neurons, --all, or -h)"
-    echo "\"./get_dataset 1024\" would download and extract benchmarks with 1024 neurons"
-    echo "\"./get_dataset --all\" would download and extract all benchmarks"
+    echo "usage : ./get_dataset.sh (num_neurons, --all, or -h)"
+    echo "\"./get_dataset.sh 1024\" would download and extract benchmarks with 1024 neurons"
+    echo "\"./get_dataset.sh --all\" would download and extract all benchmarks"
     exit
   fi
 

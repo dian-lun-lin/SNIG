@@ -141,6 +141,9 @@ void BF<T>::_set_parameters(
   const size_t num_inputs,
   const size_t num_gpus
 ) {
+  Base<T>::log("Using ", num_gpus, " GPUs", "\n");
+  Base<T>::log("Total input size : ", num_inputs, "\n\n");
+
   Base<T>::_num_gpus = num_gpus;
   Base<T>::_num_inputs = num_inputs;
 

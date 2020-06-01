@@ -17,9 +17,9 @@ int main(int argc, char* argv[]) {
   //        --num_layers(-l)             :  number of layers 120, 480, or 1920
   //        --bias(-b)                   :  bias
   //        --num_gpus                   :  number of GPUs 1, 2, 3, 4, ...
-  //        --input_batch_size           :  input batch size
-  //        --num_weight_buffers         :  number of weight buffers, must be even and factor of 120
-  //        --thread_dimension           :  thread dimsion for inference kernel
+  //        --input_batch_size           :  input batch size, must be a factor of num_inputs (60000)
+  //        --num_weight_buffers         :  number of weight buffers, must be an even number
+  //        --thread_dimension           :  thread dimsion for inference kernel, constrained by the maximum number of threads (typically 1024)
 
   //example1:  
   //        ./snig
@@ -90,14 +90,14 @@ int main(int argc, char* argv[]) {
   app.add_option(
     "--num_weight_buffers", 
     num_weight_buffers,
-    "number of weight buffers, default is 2"
+    "number of weight buffers, default is 2, must be an even number"
   );
   
   size_t input_batch_size = 5000;
   app.add_option(
     "--input_batch_size", 
     input_batch_size,
-    "number of input bath size, default is 5000"
+    "number of input bath size, default is 5000, must be a factor of num_input (60000)"
   );
 
   //for kernel dimesion
@@ -110,7 +110,7 @@ int main(int argc, char* argv[]) {
   app.add_option(
     "-t, --thread_dimension",
     thread_vector,
-    "thread dimension for inference kernel"
+    "thread dimension for inference kernel, need 3 parameters, default is 2 512 1, constrained by the maximum number of threads (typically 1024)"
   )->expected(3);
 
   CLI11_PARSE(app, argc, argv);
