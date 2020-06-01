@@ -8,7 +8,7 @@ SNIG is an inference engine for the [MIT/Amazon/IEEE HPEC Sparse Deep Neural Net
 
 We develop highly optimized inference kernels and leverage the power of CUDA Graphs to enable efficient decomposition of model and data parallelisms.
 
-# Compile and Run SNIG
+# Step 1 : Compile SNIG
 
 ```bash
 ~$ mkdir build
@@ -26,7 +26,7 @@ cd bin/
 
 To run other benchmarks, you need to download the dataset from MIT/IEEE/Amazon Graph Challenge.
 
-# Download the Model, Input Dataset, and Golden Reference
+# Step 2: Download the Model, Input Dataset, and Golden Reference
 
 The dataset is available at https://graphchallenge.mit.edu/data-sets
 
@@ -47,7 +47,7 @@ The file paths should be like :
 ./dataset/MNIST/sparse-images-1024.tsv
 ```
 
-## Transform the Input Dataset to Binary Format
+# Step 3: Transform the Input Dataset to Binary Format
 
 Computing the raw dataset is extremely time-consuming.
 To execute SNIG, you need to transform the input dataset to binary format first.
@@ -55,7 +55,7 @@ To execute SNIG, you need to transform the input dataset to binary format first.
 
 First, 
 ``` 
-  cd bin/ 
+  ~$ cd bin/ 
 ```
 To convert one bencmark :
 ```
@@ -69,31 +69,42 @@ To convert all benchmarks :
 ```
 Note that converting all benchmarks would take some time.
 
-## Run SNIG on a Specific Benchmark
+# Step 4 : Run SNIG on a Specific Benchmark
+First, 
 ```
   cd bin/
 ```
 
-You can either use ```./snig ``` for setting details or our srcipt ```./executor.sh``` with tuned parameters for best performance.
-
-### For ```./executor.sh``` :
+You can either use ```~$ ./snig ``` for setting details or our srcipt ```~$ ./executor.sh``` with tuned parameters
+## For ```~$ ./executor.sh``` :
 ```
-  ./execuator.sh -mode (SNIG, BF, SNIG_pipeline) -num_neurons -num_layers -num_gpus
+  ~$ ./execuator.sh -mode (SNIG, BF, SNIG_pipeline) -num_neurons -num_layers -num_gpus
 ```
 For example, ```~$ ./executor.sh SNIG 65536 1920 4``` use SNIG to peform benchmark with 65536 neurons and 1920 layers under 4 GPUs.
 
-Check ``` ./executor.sh -h``` for more details
+Check ``` ~$ ./executor.sh -h``` for more details
 
-### For ```./snig``` :
+## For ```~$ ./snig``` :
 ```
-  ./snig
+  ~$ ./snig -mode -weight -input -golden -num_neurons -num_layers -bias --num_gpus --num_weight_buffers --input_batch_size -thread_dimension
 ```
+Check ```~$ ./snig -h ``` for more detials
 
-```bash
-~$ ???
+## Command Options for ```~$./snig```
 ```
-
-## Additional Command Options
+  -h,--help                   Print this help message and exit
+  -m,--mode                   select mode(SNIG, SNIG_pipeline, or BF), default is SNIG
+  -w,--weight                 weight directory path, default is ../sample_data/weight/neuron1024/
+  -i,--input                  input binary file path, default is ../sample_data/MNIST/sparse-images-1024.b
+  -g,--golden                 golden binary file path, default is ../sample_data/MINIST/neuron1024-l120-categories.b
+  -n,--num_neurons            total number of neurons, default is 1024
+  -l,--num_layers             total number of layers, default is 120
+  -b,--bias                   bias, default is -0.3
+  --num_gpus                  number of GPUs, default is 1
+  --num_weight_buffers        number of weight buffers, default is 2
+  --input_batch_size          number of input bath size, default is 5000
+  -t,--thread_dimension       thread dimension for inference kernel, need 3 parameters, default is 2 512 1
+```
 
 # Results
 
