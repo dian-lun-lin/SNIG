@@ -51,7 +51,7 @@ The file paths should be like :
 
 Computing the raw dataset is extremely time-consuming.
 To execute SNIG, you need to transform the input dataset to binary format first.
-***Make sure all the data is stored in ```./dataset```
+**Make sure all the data is stored in** ```./dataset```
 
 First, 
 ``` 
@@ -112,12 +112,14 @@ The table below summarizes our result on a machine (mention explicitly the GPU s
 
 ## Baseline Implementation
 
-You can refere to [?.hpp](./file/to/bf/method) and ?.hpp for our implementation of the [BF method](...) and the [GPipe](...).
+You can refere to [bf.hpp](./SNIG/bf/bf.hpp) and [kernel.hpp](./SNIG/bf/kernel.hpp) for our implementation of the 
+[A GPU Implementation of the Sparse Deep Neural Network Graph Challenge](https://doi.org/10.1109/HPEC.2019.8916223),
+and [snig_pipeline](./SNIG/snig/snig_pipeline.hpp) and [kernel.hpp](./SNIG/snig/kernel.hpp) for our implementation of the [GPipe: Efficient Training of Giant Neural Networks using Pipeline Parallelism](https://papers.nips.cc/paper/8305-gpipe-efficient-training-of-giant-neural-networks-using-pipeline-parallelism).
 
 # Reference
 
-+ Link to the BF paper
-+ Link to the GPipe paper
++ [A GPU Implementation of the Sparse Deep Neural Network Graph Challenge](https://doi.org/10.1109/HPEC.2019.8916223)
++ [GPipe: Efficient Training of Giant Neural Networks using Pipeline Parallelism](https://papers.nips.cc/paper/8305-gpipe-efficient-training-of-giant-neural-networks-using-pipeline-parallelism)
 
 
 TO DL: you may draw a table of benchmar statistics (Table I in the paper)
