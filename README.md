@@ -119,8 +119,9 @@ Check ```~$ ./snig -h ``` for more detials
 ```
 
 # Results
+All experiments ran on a Ubuntu Linux 5.0.0-21-generic x86 64-bit machine with 40 Intel Xeon Gold 6138 CPU cores at 2.00 GHz, 4 GeForce RTX 2080 Ti GPUs with 11 GB memory, and 256 GB RAM. We compiled all programs using Nvidia CUDA nvcc 10.1 on a host compiler of GNU GCC-8.3.0 with C++14 standards -std=c++14 and optimization flags -O2 enabled. All data is an average of ten runs with float type.
 
-The table below summarizes our result on a machine (mention explicitly the GPU specification) ??
+<img align=center src="./.others/results.png" />
 
 ## Baseline Implementation
 
