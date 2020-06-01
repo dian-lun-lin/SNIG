@@ -1,88 +1,152 @@
 #include <CLI11/CLI11.hpp>
 #include <SNIG/utility/reader.hpp>
+#include <SNIG/utility/utility.hpp>
+#include <vector>
 
+void convert_to_binary(
+  const std::fs::path& weight_path,
+  const std::fs::path& input_path,
+  const std::fs::path& golden_path,
+  const size_t num_neurons,
+  const size_t sec_size,
+  const size_t num_secs,
+  const size_t num_layers=1920
+);
 
 int main(int argc, char* argv[]) {
 
-  // usage: ./tsv_file_to_binary
+  // usage: ./to_binary
   //          --neurons(-n) :  1024, 4096, or 16384
-  //          --layers(-l)  :  120, 480, or 1920
-  //          --weight(-w)  :  directory path of weight
-  //          --input(-i)   :  directory path of input
-  //          --golden(-g)  :  directory path of golden
-  //          --golden_all  :  convert all golden files less or equal to  --layers
+  //          --convert_all :  convert all files (true, false)
+  //          --sample_data :  use sample_data (true, false)
 
   // example1:
-  //        ./tsv_file_to_binary 
+  //        ./to_binary --sample_data true
   // example2:
-  //        ./tsv_file_to_binary -n 1024 -l 1920 -w ../sample_data/weight/neuron1024/ -i ../sample_data/MNIST/ -g ../sample_data/MNIST/ --golden_all true
+  //        ./to_binary -n 1024
+  // example3:
+  //        ./to_binary -convert_all true
 
-  // COL_BLK, N_SLAB would be caculated automatically based on GPU architecture.
+  // sec_size, num_secs would be caculated automatically based on GPU architecture.
 
   CLI::App app{"Converter"};
 
-  size_t num_neurons_per_layer = 1024;
-  app.add_option("-n, --neurons", 
-    num_neurons_per_layer, 
-    "select number of neurons, default is 1024");
+  size_t num_neurons = 1024;
+  app.add_option(
+    "-n, --num_neurons", 
+    num_neurons, 
+    "select number of neurons, default is 1024"
+  );
 
-  size_t num_layers = 120;
-  app.add_option("-l, --layers", 
-    num_layers, 
-    "select number of layers, default is 120");
+  bool convert_all = false;
+  app.add_option(
+    "--covert_all", 
+    convert_all, 
+    "convert all files, default is false"
+  );
 
-  bool golden_all = true;
-  app.add_option("--golden_all", 
-    golden_all, 
-    "this would convert all golden files with the same neurons. Otherwise only specific num_layers and num_neurons would be converted. Default is true");
+  bool sample_data = false;
+  app.add_option(
+    "--sample_data", 
+    sample_data, 
+    "convert sample data to binary file, default is false"
+  );
 
-  std::fs::path weight_path("../sample_data/weight/neuron1024/");
-  app.add_option("-w, --weight_path", 
-    weight_path, 
-    "select directory of weights. Output binary files would also be generated here. Default is ../sample_data/weight/neuron1024/");
+  std::fs::path weight_path;
 
-  std::fs::path input_path("../sample_data/MNIST/");
-  app.add_option("-i, --input_path", 
-    input_path, 
-    "select input path. Output binary files would also be generated here. Default is ../sample_data/MNIST/");
+  std::fs::path input_path;
 
-  std::fs::path golden_path("../sample_data/MNIST/");
-  app.add_option("-g, --golden_path", 
-    golden_path, 
-    "select golden path. Output binary files would also be generated here. Default is ../sample_data/MNIST/");
+  std::fs::path golden_path;
 
   CLI11_PARSE(app, argc, argv);
 
-  size_t COL_BLK;
-  size_t N_SLAB;
+  size_t sec_size;
+  size_t num_secs;
 
-  cudaDeviceProp props;
-  cudaGetDeviceProperties(&props, 0);
-  size_t max_num_per_block = props.sharedMemPerBlock / sizeof(float);
+  std::cout << "Benchmark Converter\n";
 
-  if(num_neurons_per_layer <= max_num_per_block) {
-    COL_BLK = num_neurons_per_layer;
+  //convert sample data
+  if(sample_data) {
+    input_path  = "../sample_data/MNIST/";
+    golden_path = "../sample_data/MNIST/";
+    weight_path = "../sample_data/weight/neuron1024/";
+    sec_size = snig::get_sec_size<float>(num_neurons);
+    num_secs = num_neurons / sec_size; 
+
+    convert_to_binary(
+      weight_path,
+      input_path,
+      golden_path,
+      num_neurons,
+      sec_size,
+      num_secs,
+      120
+    );
+    return;
   }
-  else{
-    int max_divisor = 2;
-    while((num_neurons_per_layer % max_divisor != 0) || (max_num_per_block < (num_neurons_per_layer / max_divisor))) {
-      ++max_divisor;
+
+  //convert all benchmarks
+  if(convert_all) {
+    std::vector<int> neurons_vec{1024, 4096, 16384, 65536};
+    input_path = "../dataset/MNIST/";
+    golden_path = "../dataset/MNIST/";
+    for(auto& neuron : neurons_vec) {
+      sec_size = snig::get_sec_size<float>(num_neurons);
+      num_secs = num_neurons / sec_size; 
+      weight_path = "../dataset/weight/neuron" + std::to_string(neuron) + "/";
+      convert_to_binary(
+        weight_path,
+        input_path,
+        golden_path,
+        neuron,
+        sec_size,
+        num_secs
+      );
     }
-    COL_BLK = num_neurons_per_layer / max_divisor;
+    return;
   }
 
-  N_SLAB = num_neurons_per_layer / COL_BLK; 
+  //convert benchmarks with num_neurons neruons
+  sec_size = snig::get_sec_size<float>(num_neurons);
+  num_secs = num_neurons / sec_size; 
+  input_path = "../dataset/MNIST/";
+  golden_path = "../dataset/MNIST/";
+  weight_path = "../dataset/weight/neuron" + std::to_string(num_neurons) + "/";
 
-  std::cout << "Transforming weight files...\n";
+  convert_to_binary(
+    weight_path,
+    input_path,
+    golden_path,
+    num_neurons,
+    sec_size,
+    num_secs
+  );
 
+
+
+}
+
+void convert_to_binary(
+  const std::fs::path& weight_path,
+  const std::fs::path& input_path,
+  const std::fs::path& golden_path,
+  const size_t num_neurons,
+  const size_t sec_size,
+  const size_t num_secs,
+  const size_t num_layers
+) {
+
+  std::cout << "num_neurons : " << num_neurons << std::endl;
+
+  std::cout << "Transforming weight files... \n";
   snig::tsv_file_to_binary_file<float>(
     weight_path,
     num_layers,
-    num_neurons_per_layer,
-    num_neurons_per_layer,
-    COL_BLK,
-    N_SLAB,
-    100000
+    num_neurons,
+    num_neurons,
+    sec_size,
+    num_secs,
+    num_neurons * 32
   ); 
 
   std::cout << "Transforming input files...\n";
@@ -90,27 +154,28 @@ int main(int argc, char* argv[]) {
   snig::tsv_file_to_binary_file<float>(
     input_path,
     60000,
-    num_neurons_per_layer
+    num_neurons
   );
 
   std::cout << "Transforming golden files...\n";
 
-  if(!golden_all){
-    snig::tsv_file_to_binary_file(
-      golden_path,
-      num_neurons_per_layer,
-      num_layers,
-      60000
-    );
-  }
-  else{
-    for(int i = 120; i <= num_layers; i *= 4){
+  if(num_layers == 1920) {
+    std::vector<int> layers_vec{120, 480, 1920};
+    for(int i = 0; i < 3; ++i) {
       snig::tsv_file_to_binary_file(
         golden_path,
-        num_neurons_per_layer,
-        i,
+        num_neurons,
+        layers_vec[i],
         60000
       );
     }
+  }
+  else {
+    snig::tsv_file_to_binary_file(
+      golden_path,
+      num_neurons,
+      num_layers,
+      60000
+    );
   }
 }

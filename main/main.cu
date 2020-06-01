@@ -22,10 +22,10 @@ int main(int argc, char* argv[]) {
   //        --thread_dimension           :  thread dimsion for inference kernel
 
   //example1:  
-  //        ./main_cu
+  //        ./snig
 
   //example2:  
-  //        ./main_cuda  -m SNIG -w ../sample_data/weight/neuron1024/ -i ../sample_data/MNIST/sparse-images-1024.b -g ../sample_data/MNIST/neuron1024-l120-categories.b -n 1024 -l 120 -b -0.3 --num_gpus 1 --input_batch_size 5000 --num_weight_buffers 2 --thread_dimension 2 512 1
+  //        ./snig  -m SNIG -w ../sample_data/weight/neuron1024/ -i ../sample_data/MNIST/sparse-images-1024.b -g ../sample_data/MNIST/neuron1024-l120-categories.b -n 1024 -l 120 -b -0.3 --num_gpus 1 --input_batch_size 5000 --num_weight_buffers 2 --thread_dimension 2 512 1
 
   CLI::App app{"SNIG"};
 
