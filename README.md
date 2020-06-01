@@ -112,9 +112,11 @@ The table below summarizes our result on a machine (mention explicitly the GPU s
 
 ## Baseline Implementation
 
-You can refere to [bf.hpp](./SNIG/bf/bf.hpp) and [kernel.hpp](./SNIG/bf/kernel.hpp) for our implementation of the 
-[A GPU Implementation of the Sparse Deep Neural Network Graph Challenge](https://doi.org/10.1109/HPEC.2019.8916223),
-and [snig_pipeline](./SNIG/snig/snig_pipeline.hpp) and [kernel.hpp](./SNIG/snig/kernel.hpp) for our implementation of the [GPipe: Efficient Training of Giant Neural Networks using Pipeline Parallelism](https://papers.nips.cc/paper/8305-gpipe-efficient-training-of-giant-neural-networks-using-pipeline-parallelism).
+You can refere to :
+
+[bf.hpp](./SNIG/bf/bf.hpp) and [kernel.hpp](./SNIG/bf/kernel.hpp) for our implementation of the [BF method](https://doi.org/10.1109/HPEC.2019.8916223)
+
+[snig_pipeline.hpp](./SNIG/snig/snig_pipeline.hpp) and [kernel.hpp](./SNIG/snig/kernel.hpp) for our implementation of the [GPipe*](https://papers.nips.cc/paper/8305-gpipe-efficient-training-of-giant-neural-networks-using-pipeline-parallelism).
 
 # Reference
 
