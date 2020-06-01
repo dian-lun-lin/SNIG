@@ -50,7 +50,7 @@ The file paths should be like :
 
 ```
 ./dataset/weight/neuron1024/{tsv files}
-./datast/MNIST/neuron1024-l120-categories.tsv
+./dataset/MNIST/neuron1024-l120-categories.tsv
 ./dataset/MNIST/sparse-images-1024.tsv
 ```
 
@@ -58,17 +58,17 @@ The file paths should be like :
 
 Preprocessing the raw dataset is extremely time-consuming.
 To execute SNIG, you need to transform the input dataset to binary format first.
-**Make sure all the data is stored in** ```./dataset```
+**Make sure all the data is stored in** ```./dataset```.
 
 Firstly, 
 ``` bash
   ~$ cd bin/ 
 ```
-To convert one bencmark :
+To convert a bencmark :
 ```bash
 ~$ ./to_binary --num_neurons --num_layers
 ```
-For example, ``` ~$ ./to_binary --num_neurons 16384 --num_layers 1920 ``` would convert benchmark with 16384 neurons and 1920 layers to binary file.
+For example, ``` ~$ ./to_binary --num_neurons 16384 --num_layers 1920 ``` would convert the benchmark with 16384 neurons and 1920 layers to binary file.
 
 To convert all benchmarks :
 ```bash
@@ -82,12 +82,12 @@ Firstly,
   cd bin/
 ```
 
-You can either use ```~$ ./snig ``` for setting details or our srcipt ```~$ ./executor.sh``` with tuned parameters
+You can either use ```~$ ./snig ``` for setting details or our srcipt ```~$ ./executor.sh``` with tuned parameters.
 ## For ```~$ ./executor.sh``` :
 ```bash
   ~$ ./execuator.sh -mode (SNIG, BF, SNIG_pipeline) -num_neurons -num_layers -num_gpus
 ```
-For example, ```~$ ./executor.sh SNIG 65536 1920 4``` use SNIG to peform benchmark with 65536 neurons and 1920 layers under 4 GPUs.
+For example, ```~$ ./executor.sh SNIG 65536 1920 4``` use SNIG to peform the benchmark with 65536 neurons and 1920 layers under 4 GPUs.
 
 Check ``` ~$ ./executor.sh -h``` for more details
 
