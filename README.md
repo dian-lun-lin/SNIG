@@ -18,12 +18,13 @@ We develop highly optimized inference kernels and leverage the power of CUDA Gra
 ```bash
 ~$ mkdir build
 ~$ cd build
+~$ cmake ../
 ~$ make
 ```
 You will see executable files ('snig' and 'to_binary') under `bin/`.
 To run SNIG with smallest benchmark under 1 GPU, you can simply type :
 
-```
+```bash
 cd bin/
 ~$ ./to_binary --sample_data true
 ~$ ./snig
@@ -36,7 +37,8 @@ To run other benchmarks, you need to download the dataset from MIT/IEEE/Amazon G
 The dataset is available at https://graphchallenge.mit.edu/data-sets
 
 First, create directories to store the dataset :
-```
+
+```bash
 ~$ mkdir ./dataset
 ~$ mkdir ./dataset/MNIST
 ~$ mkdir ./dataset/weight
@@ -54,35 +56,35 @@ The file paths should be like :
 
 # Step 3: Transform the Input Dataset to Binary Format
 
-Computing the raw dataset is extremely time-consuming.
+Preprocessing the raw dataset is extremely time-consuming.
 To execute SNIG, you need to transform the input dataset to binary format first.
 **Make sure all the data is stored in** ```./dataset```
 
-First, 
-``` 
+Firstly, 
+``` bash
   ~$ cd bin/ 
 ```
 To convert one bencmark :
-```
+```bash
 ~$ ./to_binary --num_neurons --num_layers
 ```
 For example, ``` ~$ ./to_binary 16384 1920 ``` would convert benchmark with 16384 neurons and 1920 layers to binary file.
 
 To convert all benchmarks :
-```
+```bash
 ~$ ./to_binary --conver_all true
 ```
 Note that converting all benchmarks would take some time.
 
 # Step 4 : Run SNIG on a Specific Benchmark
-First, 
-```
+Firstly, 
+```bash
   cd bin/
 ```
 
 You can either use ```~$ ./snig ``` for setting details or our srcipt ```~$ ./executor.sh``` with tuned parameters
 ## For ```~$ ./executor.sh``` :
-```
+```bash
   ~$ ./execuator.sh -mode (SNIG, BF, SNIG_pipeline) -num_neurons -num_layers -num_gpus
 ```
 For example, ```~$ ./executor.sh SNIG 65536 1920 4``` use SNIG to peform benchmark with 65536 neurons and 1920 layers under 4 GPUs.
@@ -90,9 +92,14 @@ For example, ```~$ ./executor.sh SNIG 65536 1920 4``` use SNIG to peform benchma
 Check ``` ~$ ./executor.sh -h``` for more details
 
 ## For ```~$ ./snig``` :
-```
+```bash
   ~$ ./snig -mode -weight -input -golden -num_neurons -num_layers -bias --num_gpus --num_weight_buffers --input_batch_size -thread_dimension
 ```
+For example, 
+```        
+~$ ./snig  -m SNIG -w ../dataset/weight/neuron1024/ -i ../dataset/MNIST/sparse-images-1024.b -g ../dataset/MNIST/neuron1024-l120-categories.b -n 16384 -l 480 -b -0.4 --num_gpus 3 --input_batch_size 5000 --num_weight_buffers 2 --thread_dimension 2 512 1                                                                             
+```                
+
 Check ```~$ ./snig -h ``` for more detials
 
 ## Command Options for ```~$./snig```
