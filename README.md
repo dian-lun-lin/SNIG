@@ -22,10 +22,10 @@ We develop highly optimized inference kernels and leverage the power of CUDA Gra
 ~$ make
 ```
 You will see executable files ('snig' and 'to_binary') under `bin/`.
-To run SNIG with smallest benchmark under 1 GPU, you can simply type :
+To run SNIG with the smallest benchmark under 1 GPU, you can simply type :
 
 ```bash
-cd bin/
+cd bin
 ~$ ./to_binary --sample_data true
 ~$ ./snig
 ```
@@ -42,17 +42,18 @@ First, create directories to store the dataset :
 ~$ mkdir ./dataset/weight
 ```
 You can download the dataset either by yourself or by using our script.
-## Download dataset by our script (Linux):
+## Download the dataset by our script (Linux):
 ```bash
-~$ cd ./bin
-~$ ./get_dataset (num_neurons --all)
+~$ cd bin
+~$ ./get_dataset.sh (num_neurons --all)
 
-"./get_dataset 1024" would download and extract benchmarks with 1024 neurons
-"./get_dataset --all" would download and extract all benchmarks
+"./get_dataset.sh 1024" would download and extract benchmarks with 1024 neurons
+"./get_dataset.sh --all" would download and extract all benchmarks
 ```
+Check ``` ~$ ./get_dataset.sh -h``` for more details.
 Note that this script may fail to get the dataset due to various environment.
 
-## Download dataset manually :
+## Download the dataset manually :
 The dataset is available at https://graphchallenge.mit.edu/data-sets
 
 After downloading and extracting the dataset, 
@@ -68,32 +69,33 @@ The file paths should be like :
 
 # Step 3: Transform the Benchmarks to Binary Format
 
-Preprocessing the raw dataset is extremely time-consuming.
+Computing the raw dataset is extremely time-consuming.
 To execute SNIG, you need to transform the benchmarks to binary format first.
 **Make sure the benchmark (model, input data, golden reference) you want to transform is already stored in** ```./dataset```.
  
 ``` bash
-~$ cd bin/ 
-~$ ./to_binary --num_neurons(--convert_all) --num_layers
+~$ cd bin
+~$ ./to_binary --num_neurons(--convert_all)
 
-"./to_binary --num_neurons 16384 --num_layers 1920"  would convert the benchmark with 16384 neurons and 1920 layers to binary file
-"./to_binary --convert_all true" would convert all benchmarks
+"./to_binary --num_neurons 16384"  would convert benchmarks with 16384 neurons to binary format
+"./to_binary --convert_all true" would convert all benchmarks to format
 ```
+Check ``` ~$ ./to_binary -h``` for more details.
 Note that converting all benchmarks would take some time.
 
 # Step 4 : Run SNIG on a Specific Benchmark
 Firstly, 
 ```bash
-  cd bin/
+  cd bin
 ```
 
-You can either use ```~$ ./snig ``` for setting details or our srcipt ```~$ ./executor.sh``` with tuned parameters.
+You can use either ```~$ ./snig ``` for setting details or our srcipt ```~$ ./executor.sh``` with tuned parameters.
 ## For ```~$ ./executor.sh``` :
 ```bash
 ~$ ./execuator.sh mode (SNIG, BF, SNIG_pipeline) num_neurons num_layers num_gpus
   
 "./executor.sh SNIG 65536 1920 4" use SNIG to peform the benchmark with 65536 neurons and 1920 layers under 4 GPUs
-"./executor.sh BF 4096 1920 2" use BF to peform the benchmark with 4096 neurons and 1920 layers under 2 GPUs
+"./executor.sh BF 4096 1920 2" use BF to perform the benchmark with 4096 neurons and 1920 layers under 2 GPUs
 ```
 
 Check ``` ~$ ./executor.sh -h``` for more details.
@@ -109,18 +111,18 @@ Check ```~$ ./snig -h ``` for more detials.
 
 ### Command Options for ```~$./snig```
 ```
-  -h,--help                   Print this help message and exit
-  -m,--mode                   select mode(SNIG, SNIG_pipeline, or BF), default is SNIG
-  -w,--weight                 weight directory path, default is ../sample_data/weight/neuron1024/
-  -i,--input                  input binary file path, default is ../sample_data/MNIST/sparse-images-1024.b
-  -g,--golden                 golden binary file path, default is ../sample_data/MINIST/neuron1024-l120-categories.b
-  -n,--num_neurons            total number of neurons, default is 1024
-  -l,--num_layers             total number of layers, default is 120
-  -b,--bias                   bias, default is -0.3
-  --num_gpus                  number of GPUs, default is 1
-  --num_weight_buffers        number of weight buffers, default is 2
-  --input_batch_size          number of input bath size, default is 5000
-  -t,--thread_dimension       thread dimension for inference kernel, need 3 parameters, default is 2 512 1
+-h,--help                   Print this help message and exit
+-m,--mode                   select mode(SNIG, SNIG_pipeline, or BF), default is SNIG
+-w,--weight                 weight directory path, default is ../sample_data/weight/neuron1024/
+-i,--input                  input binary file path, default is ../sample_data/MNIST/sparse-images-1024.b
+-g,--golden                 golden binary file path, default is ../sample_data/MINIST/neuron1024-l120-categories.b
+-n,--num_neurons            total number of neurons, default is 1024
+-l,--num_layers             total number of layers, default is 120
+-b,--bias                   bias, default is -0.3
+--num_gpus                  number of GPUs, default is 1
+--num_weight_buffers        number of weight buffers, default is 2
+--input_batch_size          number of input bath size, default is 5000
+-t,--thread_dimension       thread dimension for inference kernel, need 3 parameters, default is 2 512 1
 ```
 
 # Results
