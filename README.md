@@ -15,7 +15,7 @@ We develop highly optimized inference kernels and leverage the power of CUDA Gra
 ~$ cd build
 ~$ make
 ```
-You will see executable files 'snig', 'to_binary' under `bin/`.
+You will see executable files ('snig' and 'to_binary') under `bin/`.
 To run SNIG with smallest benchmark under 1 GPU, you can simply type :
 
 ```
@@ -51,7 +51,7 @@ The file paths should be like :
 
 Computing the raw dataset is extremely time-consuming.
 To execute SNIG, you need to transform the input dataset to binary format first.
-Make sure all the data is stored in ```./dataset```
+***Make sure all the data is stored in ```./dataset```
 
 First, 
 ``` 
@@ -59,19 +59,35 @@ First,
 ```
 To convert one bencmark :
 ```
-~$ ./bin/to_binary --num_neurons --num_layers
+~$ ./to_binary --num_neurons --num_layers
 ```
-For example, ``` ~$ ./bin/to_binary 16384 1920 ``` would convert benchmark with 16384 neurons and 1920 layers to binary file
+For example, ``` ~$ ./to_binary 16384 1920 ``` would convert benchmark with 16384 neurons and 1920 layers to binary file.
 
 To convert all benchmarks :
 ```
-~$ ./bin/to_binary --conver_all true
+~$ ./to_binary --conver_all true
 ```
 Note that converting all benchmarks would take some time.
 
 ## Run SNIG on a Specific Benchmark
+```
+  cd bin/
+```
 
-???
+You can either use ```./snig ``` for setting details or our srcipt ```./executor.sh``` with tuned parameters for best performance.
+
+### For ```./executor.sh``` :
+```
+  ./execuator.sh -mode (SNIG, BF, SNIG_pipeline) -num_neurons -num_layers -num_gpus
+```
+For example, ```~$ ./executor.sh SNIG 65536 1920 4``` use SNIG to peform benchmark with 65536 neurons and 1920 layers under 4 GPUs.
+
+Check ``` ./executor.sh -h``` for more details
+
+### For ```./snig``` :
+```
+  ./snig
+```
 
 ```bash
 ~$ ???
