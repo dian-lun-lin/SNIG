@@ -106,7 +106,7 @@ Check ``` ~$ ./executor.sh -h``` for more details.
 ```bash
 ~$ ./snig --mode --weight --input --golden --num_neurons --num_layers --bias --num_gpus --num_weight_buffers --input_batch_size --thread_dimension
   
-"./snig  -m SNIG -w ../dataset/weight/neuron1024/ -i ../dataset/MNIST/sparse-images-1024.b -g ../dataset/MNIST/neuron1024-l120-categories.b -n 16384 -l 480 -b -0.4 --num_gpus 3 --input_batch_size 5000 --num_weight_buffers 2 --thread_dimension 2 512 1"
+"./snig  -m SNIG -w ../dataset/weight/neuron4096/ -i ../dataset/MNIST/sparse-images-4096.b -g ../dataset/MNIST/neuron4096-l480-categories.b -n 4096 -l 480 -b -0.35 --num_gpus 3 --input_batch_size 5000 --num_weight_buffers 2 --thread_dimension 2 512 1"
 ```
 
 Check ```~$ ./snig -h ``` for more detials.
