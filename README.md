@@ -90,24 +90,24 @@ Firstly,
 You can either use ```~$ ./snig ``` for setting details or our srcipt ```~$ ./executor.sh``` with tuned parameters.
 ## For ```~$ ./executor.sh``` :
 ```bash
-  ~$ ./execuator.sh mode (SNIG, BF, SNIG_pipeline) num_neurons num_layers num_gpus
+~$ ./execuator.sh mode (SNIG, BF, SNIG_pipeline) num_neurons num_layers num_gpus
   
-  "./executor.sh SNIG 65536 1920 4" use SNIG to peform the benchmark with 65536 neurons and 1920 layers under 4 GPUs
-  "./executor.sh BF 4096 1920 2" use BF to peform the benchmark with 4096 neurons and 1920 layers under 2 GPUs
+"./executor.sh SNIG 65536 1920 4" use SNIG to peform the benchmark with 65536 neurons and 1920 layers under 4 GPUs
+"./executor.sh BF 4096 1920 2" use BF to peform the benchmark with 4096 neurons and 1920 layers under 2 GPUs
 ```
 
-Check ``` ~$ ./executor.sh -h``` for more details
+Check ``` ~$ ./executor.sh -h``` for more details.
 
 ## For ```~$ ./snig``` :
 ```bash
-  ~$ ./snig -mode -weight -input -golden -num_neurons -num_layers -bias --num_gpus --num_weight_buffers --input_batch_size -thread_dimension
+~$ ./snig --mode --weight --input --golden --num_neurons --num_layers --bias --num_gpus --num_weight_buffers --input_batch_size --thread_dimension
   
 "./snig  -m SNIG -w ../dataset/weight/neuron1024/ -i ../dataset/MNIST/sparse-images-1024.b -g ../dataset/MNIST/neuron1024-l120-categories.b -n 16384 -l 480 -b -0.4 --num_gpus 3 --input_batch_size 5000 --num_weight_buffers 2 --thread_dimension 2 512 1"
 ```
 
-Check ```~$ ./snig -h ``` for more detials
+Check ```~$ ./snig -h ``` for more detials.
 
-## Command Options for ```~$./snig```
+### Command Options for ```~$./snig```
 ```
   -h,--help                   Print this help message and exit
   -m,--mode                   select mode(SNIG, SNIG_pipeline, or BF), default is SNIG
