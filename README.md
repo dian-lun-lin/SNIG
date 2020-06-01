@@ -68,7 +68,7 @@ To convert one bencmark :
 ```bash
 ~$ ./to_binary --num_neurons --num_layers
 ```
-For example, ``` ~$ ./to_binary 16384 1920 ``` would convert benchmark with 16384 neurons and 1920 layers to binary file.
+For example, ``` ~$ ./to_binary --num_neurons 16384 --num_layers 1920 ``` would convert benchmark with 16384 neurons and 1920 layers to binary file.
 
 To convert all benchmarks :
 ```bash
@@ -140,12 +140,9 @@ You can refer to :
 
 [bf.hpp](./SNIG/bf/bf.hpp) and [kernel.hpp](./SNIG/bf/kernel.hpp) for our implementation of the [BF method](https://doi.org/10.1109/HPEC.2019.8916223)
 
-[snig_pipeline.hpp](./SNIG/snig/snig_pipeline.hpp) and [kernel.hpp](./SNIG/snig/kernel.hpp) for our implementation of the [GPipe*](https://papers.nips.cc/paper/8305-gpipe-efficient-training-of-giant-neural-networks-using-pipeline-parallelism).
+[snig_pipeline.hpp](./SNIG/snig/snig_pipeline.hpp) and [kernel.hpp](./SNIG/snig/kernel.hpp) for our implementation of the [GPipe*](https://papers.nips.cc/paper/8305-gpipe-efficient-training-of-giant-neural-networks-using-pipeline-parallelism)
 
 # Reference
 
 + [A GPU Implementation of the Sparse Deep Neural Network Graph Challenge](https://doi.org/10.1109/HPEC.2019.8916223)
 + [GPipe: Efficient Training of Giant Neural Networks using Pipeline Parallelism](https://papers.nips.cc/paper/8305-gpipe-efficient-training-of-giant-neural-networks-using-pipeline-parallelism)
-
-
-TO DL: you may draw a table of benchmar statistics (Table I in the paper)
