@@ -121,7 +121,18 @@ Check ```~$ ./snig -h ``` for more detials
 # Results
 All experiments ran on a Ubuntu Linux 5.0.0-21-generic x86 64-bit machine with 40 Intel Xeon Gold 6138 CPU cores at 2.00 GHz, 4 GeForce RTX 2080 Ti GPUs with 11 GB memory, and 256 GB RAM. We compiled all programs using Nvidia CUDA nvcc 10.1 on a host compiler of GNU GCC-8.3.0 with C++14 standards -std=c++14 and optimization flags -O2 enabled. All data is an average of ten runs with float type.
 
+Overall runtime performance of SNIG, BF, and GPipe ∗ across one, two, three, and four GPUs. All data is reported in seconds. Bold text represents the best solution in the corresponding benchmark. All results match the golden reference provided by the MIT/IEEE/Amazon Sparse DNN Challenge.
 <img align=center src="./.others/results.png" />
+
+<p align=center>
+Execution timeline of each method on completing 65536 neurons and 1920 layers under 4 GPUs :
+<img src="./.others/timeline.png" />
+</p>
+
+<p align=center>
+Maximum memory usage under 4 GPUs :
+<img src="./.others/memory_usage.png" />
+</p>
 
 ## Baseline Implementation
 
