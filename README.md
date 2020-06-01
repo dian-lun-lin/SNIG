@@ -112,7 +112,7 @@ The table below summarizes our result on a machine (mention explicitly the GPU s
 
 ## Baseline Implementation
 
-You can refere to :
+You can refer to :
 
 [bf.hpp](./SNIG/bf/bf.hpp) and [kernel.hpp](./SNIG/bf/kernel.hpp) for our implementation of the [BF method](https://doi.org/10.1109/HPEC.2019.8916223)
 
