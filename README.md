@@ -32,9 +32,7 @@ cd bin/
 
 To run other benchmarks, you need to download the dataset from MIT/IEEE/Amazon Graph Challenge.
 
-# Step 2: Download the Model, Input Dataset, and Golden Reference
-
-The dataset is available at https://graphchallenge.mit.edu/data-sets
+# Step 2: Download the Dataset
 
 First, create directories to store the dataset :
 
@@ -43,6 +41,20 @@ First, create directories to store the dataset :
 ~$ mkdir ./dataset/MNIST
 ~$ mkdir ./dataset/weight
 ```
+You can download the dataset either by yourself or by using our script.
+## Download dataset by our script (Linux):
+```bash
+~$ cd ./bin
+~$ ./get_dataset (num_neurons --all)
+
+"./get_dataset 1024" would download and extract benchmarks with 1024 neurons
+"./get_dataset --all" would download and extract all benchmarks
+```
+Note that this script may fail to get the dataset due to various environment.
+
+## Download dataset manually :
+The dataset is available at https://graphchallenge.mit.edu/data-sets
+
 After downloading and extracting the dataset, 
 you need to move the input dataset and golden reference to ```./dataset/MNIST``` and the model to ```./dataset/weight/```, respectively.
 
@@ -54,25 +66,18 @@ The file paths should be like :
 ./dataset/MNIST/sparse-images-1024.tsv
 ```
 
-# Step 3: Transform the Input Dataset to Binary Format
+# Step 3: Transform the Benchmarks to Binary Format
 
 Preprocessing the raw dataset is extremely time-consuming.
-To execute SNIG, you need to transform the input dataset to binary format first.
-**Make sure all the data is stored in** ```./dataset```.
-
-Firstly, 
+To execute SNIG, you need to transform the benchmarks to binary format first.
+**Make sure the benchmark (model, input data, golden reference) you want to transform is already stored in** ```./dataset```.
+ 
 ``` bash
-  ~$ cd bin/ 
-```
-To convert a bencmark :
-```bash
-~$ ./to_binary --num_neurons --num_layers
-```
-For example, ``` ~$ ./to_binary --num_neurons 16384 --num_layers 1920 ``` would convert the benchmark with 16384 neurons and 1920 layers to binary file.
+~$ cd bin/ 
+~$ ./to_binary --num_neurons(--convert_all) --num_layers
 
-To convert all benchmarks :
-```bash
-~$ ./to_binary --convert_all true
+"./to_binary --num_neurons 16384 --num_layers 1920"  would convert the benchmark with 16384 neurons and 1920 layers to binary file
+"./to_binary --convert_all true" would convert all benchmarks
 ```
 Note that converting all benchmarks would take some time.
 
@@ -85,20 +90,20 @@ Firstly,
 You can either use ```~$ ./snig ``` for setting details or our srcipt ```~$ ./executor.sh``` with tuned parameters.
 ## For ```~$ ./executor.sh``` :
 ```bash
-  ~$ ./execuator.sh -mode (SNIG, BF, SNIG_pipeline) -num_neurons -num_layers -num_gpus
+  ~$ ./execuator.sh mode (SNIG, BF, SNIG_pipeline) num_neurons num_layers num_gpus
+  
+  "./executor.sh SNIG 65536 1920 4" use SNIG to peform the benchmark with 65536 neurons and 1920 layers under 4 GPUs
+  "./executor.sh BF 4096 1920 2" use BF to peform the benchmark with 4096 neurons and 1920 layers under 2 GPUs
 ```
-For example, ```~$ ./executor.sh SNIG 65536 1920 4``` use SNIG to peform the benchmark with 65536 neurons and 1920 layers under 4 GPUs.
 
 Check ``` ~$ ./executor.sh -h``` for more details
 
 ## For ```~$ ./snig``` :
 ```bash
   ~$ ./snig -mode -weight -input -golden -num_neurons -num_layers -bias --num_gpus --num_weight_buffers --input_batch_size -thread_dimension
+  
+"./snig  -m SNIG -w ../dataset/weight/neuron1024/ -i ../dataset/MNIST/sparse-images-1024.b -g ../dataset/MNIST/neuron1024-l120-categories.b -n 16384 -l 480 -b -0.4 --num_gpus 3 --input_batch_size 5000 --num_weight_buffers 2 --thread_dimension 2 512 1"
 ```
-For example, 
-```        
-~$ ./snig  -m SNIG -w ../dataset/weight/neuron1024/ -i ../dataset/MNIST/sparse-images-1024.b -g ../dataset/MNIST/neuron1024-l120-categories.b -n 16384 -l 480 -b -0.4 --num_gpus 3 --input_batch_size 5000 --num_weight_buffers 2 --thread_dimension 2 512 1                                                                             
-```                
 
 Check ```~$ ./snig -h ``` for more detials
 
