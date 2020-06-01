@@ -122,9 +122,9 @@ Check ```~$ ./snig -h ``` for more detials.
 -l,--num_layers             total number of layers, default is 120
 -b,--bias                   bias, default is -0.3
 --num_gpus                  number of GPUs, default is 1
---num_weight_buffers        number of weight buffers, default is 2
---input_batch_size          number of input bath size, default is 5000
--t,--thread_dimension       thread dimension for inference kernel, need 3 parameters, default is 2 512 1
+--num_weight_buffers        number of weight buffers, default is 2,  must be an even number
+--input_batch_size          number of input bath size, default is 5000, must be a factor of the total number of inputs (60000)
+-t,--thread_dimension       thread dimension for inference kernel, need 3 parameters, default is 2 512 1,  constrained by the maximum number of threads (typically 1024)
 ```
 
 # Results
