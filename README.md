@@ -2,15 +2,14 @@
 
 Accelerated Large Sparse Neural Network Inference using Task Graph Parallelism 
 
-<p align=center>
-<img src="./.others/snig_taskgraph.png" width="750" height="250"/>
-</p>
-
 # Problem Statement
 
 SNIG is an inference engine for the [MIT/Amazon/IEEE HPEC Sparse Deep Neural Network Graph Challenge](./https://graphchallenge.mit.edu/challenges). 
 
 We develop highly optimized inference kernels and leverage the power of CUDA Graphs to enable efficient decomposition of model and data parallelisms.
+<p align=center>
+<img src="./.others/snig_taskgraph.png" width="725" height="250"/>
+</p>
 
 # Step 1 : Compile SNIG
 
