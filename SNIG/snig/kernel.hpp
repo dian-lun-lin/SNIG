@@ -40,7 +40,7 @@ void snig_inference(
   int tid = threadIdx.y * blockDim.x + threadIdx.x;
   //r = blockIdx.x
   //s_o = blockIdx.y
-  //num_threads = blockDim.x * blockDim.y
+  int num_threads = blockDim.x * blockDim.y;
 
   //num_secs is small enough to compute by each single thread
   bool is_all_zero = true;
@@ -52,8 +52,8 @@ void snig_inference(
     //incremental memory resetting
     //avoid calling cudaMemset
     if(is_nonzero_row_1[blockIdx.x * num_secs + blockIdx.y]) {
-      for(size_t j = blockIdx.y * sec_size + tid; j < (blockIdx.y + 1) * sec_size; j += blockDim.x * blockDim.y) {
-        Y_1[blockIdx.x * num_neurons + j] = 0;
+      for(size_t j = tid; j < sec_size; j += num_threads) {
+        Y_1[blockIdx.x * num_neurons + blockIdx.y * sec_size + j] = 0;
       }
       __syncthreads();
       if(tid == 0) {
@@ -66,17 +66,17 @@ void snig_inference(
   //forward feeding
   extern __shared__ T results[];
 
+  //set results to bias directly
+  for(size_t k = tid; k < sec_size; k += num_threads) {
+    results[k] = bias;  
+  }
+
   //use bool array size of 2 (is_nonzero) in share memory to avoid synchronization
   //is_nonzero[1] represents whether this row is nonzero
   //if is_nonzero[1] is true, this row is nonzero
   __shared__ bool is_nonzero[2];
   if(tid == 0) {
     is_nonzero[1] = false;
-  }
-
-  //set results to bias directly
-  for(size_t k = tid; k < sec_size; k += blockDim.x * blockDim.y) {
-    results[k] = bias;  
   }
   __syncthreads();
 
@@ -91,23 +91,23 @@ void snig_inference(
       }
       int beg_w = col_w[blockIdx.y * num_neurons + j] + threadIdx.x;
       int end_w = col_w[blockIdx.y * num_neurons + j + 1];
-      for(int i = beg_w; i < end_w; i += blockDim.x) {
-        int roww = row_w[i];
-        T valw = val_w[i];
+      for(int k = beg_w; k < end_w; k += blockDim.x) {
+        int roww = row_w[k];
+        T valw = val_w[k];
         atomicAdd(&results[roww - blockIdx.y * sec_size], valY * valw);
       }
     }
   }
   __syncthreads();
-  for(size_t j = tid; j < sec_size; j += blockDim.x * blockDim.y) {
-    T v = min(T(32), max(results[j], T(0)));
-    Y_1[blockIdx.x * num_neurons + blockIdx.y * sec_size + j] = v;
+  for(size_t i = tid; i < sec_size; i += num_threads) {
+    T v = min(T(32), max(results[i], T(0)));
+    Y_1[blockIdx.x * num_neurons + blockIdx.y * sec_size + i] = v;
     is_nonzero[v != 0] = true;
   }
 
   //if one thread sets is_nonzero[1] to true
   //meaning this row is nonzero
-  //toggle is_nonzero_Y_1[this row] to true
+  //toggle is_nonzero_row_1[this row] to true
   __syncthreads();
   if(tid == 0) {
     is_nonzero_row_1[blockIdx.x * num_secs + blockIdx.y] = is_nonzero[1];
