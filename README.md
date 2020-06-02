@@ -21,7 +21,7 @@ We develop highly optimized inference kernels and leverage the power of CUDA Gra
 ~$ cmake ../
 ~$ make
 ```
-You will see executable files ('snig' and 'to_binary') under `bin/`.
+You will see executable files (`snig` and `to_binary`) under `bin/`.
 To run SNIG with the smallest benchmark under 1 GPU, you can simply type :
 
 ```bash
@@ -34,7 +34,7 @@ To run other benchmarks, you need to download the dataset from MIT/IEEE/Amazon G
 
 # Step 2: Download the Dataset
 
-You can download the dataset either by yourself or by using our script.
+You can download the dataset either by yourself or by our script.
 ## Download the dataset by our script (Linux):
 ```bash
 ~$ cd bin
@@ -63,7 +63,7 @@ you need to move the input dataset and golden reference to ```dataset/MNIST/``` 
 The file paths should be like :
 
 ```
-./dataset/weight/neuron1024/{tsv files}
+./dataset/weight/neuron1024/{*.tsv}
 ./dataset/MNIST/neuron1024-l120-categories.tsv
 ./dataset/MNIST/sparse-images-1024.tsv
 ```
@@ -86,13 +86,15 @@ Check ``` ~$ ./to_binary -h``` for more details.
 
 
 # Step 4 : Run SNIG on a Specific Benchmark
-Firstly, 
+
+Move to the `bin` directory:
+
 ```bash
 ~$ cd bin
 ```
 
-You can use either ```~$ ./snig ``` for setting details or our srcipt ```~$ ./executor.sh``` with tuned parameters.
-## For ```~$ ./executor.sh``` :
+You can use either ```./snig ``` for setting details or our srcipt ```./executor.sh``` with tuned parameters.
+## For ```executor.sh``` :
 ```bash
 ~$ ./execuator.sh mode (SNIG, BF, SNIG_pipeline) num_neurons num_layers num_gpus
   
@@ -102,7 +104,7 @@ You can use either ```~$ ./snig ``` for setting details or our srcipt ```~$ ./ex
 
 Check ``` ~$ ./executor.sh -h``` for more details.
 
-## For ```~$ ./snig``` :
+## For ```snig``` :
 ```bash
 ~$ ./snig --mode --weight --input --golden --num_neurons --num_layers --bias --num_gpus --num_weight_buffers --input_batch_size --thread_dimension
   
@@ -111,7 +113,7 @@ Check ``` ~$ ./executor.sh -h``` for more details.
 
 Check ```~$ ./snig -h ``` for more detials.
 
-### Command Options for ```~$./snig```
+### Command Options for ```snig```
 ```
 -h,--help                   Print this help message and exit
 -m,--mode                   select mode(SNIG, SNIG_pipeline, or BF), default is SNIG
