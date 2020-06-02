@@ -3,7 +3,7 @@ cmake_minimum_required (VERSION 3.9)
 MESSAGE(STATUS "CMAKE_ROOT: " ${CMAKE_ROOT})
 
 # Project name
-project(SNIG VERSION 1.0.0 LANGUAGES CXX CUDA)
+project(SNIG VERSION 1.0.0 LANGUAGES CXX)
 
 # Turn on the verbose
 set(CMAKE_VERBOSE_MAKEFILE ON)
@@ -47,7 +47,7 @@ set(SDNN_UTEST_DIR ${PROJECT_SOURCE_DIR}/unittests)
 set(SDNN_3RD_PARTY_DIR ${PROJECT_SOURCE_DIR}/3rd-party)
 
 # include test
-include(CTest)
+#include(CTest)
 
 #compiler setting 
 #add_library(error_settings INTERFACE)
@@ -119,8 +119,8 @@ include_directories(${PROJECT_SOURCE_DIR})
 include_directories(${PROJECT_SOURCE_DIR}/3rd-party/)
 
 #cuda
-include_directories(/usr/local/cuda/include/)
-link_directories(/usr/local/cuda/lib64/)
+#include_directories(/usr/local/cuda/include/)
+#link_directories(/usr/local/cuda/lib64/)
 
 
 #--------interface------
