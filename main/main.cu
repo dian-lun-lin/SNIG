@@ -9,7 +9,7 @@ int main(int argc, char* argv[]) {
   //  ***All files should be converted to binary first***
 
   // usage: 
-  //        --mode(-m)                   :  mode (SNIG, SNIG_pipeline, BF)
+  //        --mode(-m)                   :  mode (SNIG, GPipe, BF)
   //        --weight(-w)                 :  path of weight directory
   //        --input(-i)                  :  path of input file
   //        --golden(-g)                 :  path of golden file
@@ -33,7 +33,7 @@ int main(int argc, char* argv[]) {
   app.add_option(
     "-m, --mode", 
     mode, 
-    "select mode(BF_one_gpu, BF_multiple_gpus, SNIG, or SNIG_pipeline), default is SNIG"
+    "select mode(SNIG, GPipe, or BF), default is SNIG"
   );
 
   std::fs::path weight_path("../sample_data/weight/neuron1024/");
@@ -131,15 +131,15 @@ int main(int argc, char* argv[]) {
     );
     result = snig.infer(input_path, 60000, input_batch_size, num_weight_buffers, num_gpus);
   }
-  else if(mode == "SNIG_pipeline") {
-    snig::SNIGPipeline<float> snig_pipeline(
+  else if(mode == "GPipe") {
+    snig::GPipe<float> gpipe(
       thread_dimension,
       weight_path, 
       bias,
       num_neurons, 
       num_layers
     );
-    result = snig_pipeline.infer(input_path, 60000, input_batch_size, num_gpus);
+    result = gpipe.infer(input_path, 60000, input_batch_size, num_gpus);
   }
   else if(mode == "BF") {
     //only perform initial partition since we don't have NVLink 

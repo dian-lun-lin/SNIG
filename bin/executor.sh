@@ -1,4 +1,4 @@
-#usage: $1 mode (BF,  SNIG, or SNIG_pipeline), default is SNIG"
+#usage: $1 mode (BF,  SNIG, or GPipe), default is SNIG"
 #       $2 num_neurons
 #       $3 num_layers
 #       $4 num_gpus

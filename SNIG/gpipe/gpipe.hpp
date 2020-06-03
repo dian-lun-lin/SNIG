@@ -4,8 +4,10 @@
 #include <SNIG/utility/reader.hpp>
 #include <SNIG/utility/matrix_format.h>
 #include <SNIG/utility/cuda_error.hpp>
-#include <SNIG/snig/kernel.hpp>
 #include <SNIG/utility/scoring.hpp>
+
+// use the same kernel as SNIG
+#include <SNIG/snig/kernel.hpp>
 #include <SNIG/base/base.hpp>
 #include <vector>
 #include <queue>
@@ -19,7 +21,7 @@ namespace snig{
 
 
 template <typename T>
-class SNIGPipeline : public Base<T> {
+class GPipe : public Base<T> {
 
   static_assert(
     std::is_same<T, float>::value || std::is_same<T, double>::value || std::is_same<T, half>::value,
@@ -37,7 +39,7 @@ class SNIGPipeline : public Base<T> {
     //record weight to delete
     std::vector<int*> _dev_record_W;
 
-    //this pipeline partitiones _num_layers evenly to each GPU
+    //partition num_layers evenly to each GPU
     size_t _num_layers_per_gpu;
 
     size_t _batch_ylen;
@@ -62,7 +64,7 @@ class SNIGPipeline : public Base<T> {
 
   public:
 
-    SNIGPipeline(
+    GPipe(
       const dim3& threads,
       const std::fs::path& weight_path,
       const T bias = -.3f,
@@ -70,7 +72,7 @@ class SNIGPipeline : public Base<T> {
       const size_t num_layers = 120
     );
 
-    ~SNIGPipeline();
+    ~GPipe();
 
     Eigen::Matrix<int, Eigen::Dynamic, 1> infer(
       const std::fs::path& input_path,
@@ -82,11 +84,11 @@ class SNIGPipeline : public Base<T> {
 };
 
 // ----------------------------------------------------------------------------
-// Definition of SNIGPipeline
+// Definition of GPipe
 // ----------------------------------------------------------------------------
 
 template <typename T>
-SNIGPipeline<T>::SNIGPipeline(
+GPipe<T>::GPipe(
   const dim3& threads,
   const std::fs::path& weight_path,
   const T bias,
@@ -95,11 +97,11 @@ SNIGPipeline<T>::SNIGPipeline(
 ):
   Base<T>(threads, weight_path, bias, num_neurons_per_layer, num_layers)
 {
-  Base<T>::log("Constructing SNIG engine using pipeline method......", "\n");
+  Base<T>::log("Constructing GPipe......", "\n");
 }
 
 template <typename T>
-SNIGPipeline<T>::~SNIGPipeline() {
+GPipe<T>::~GPipe() {
   checkCuda(cudaFree(_source_Y));
   checkCuda(cudaFree(_source_is_nonzero_row));
   for(auto& W_in_dev : _dev_record_W) {
@@ -115,7 +117,7 @@ SNIGPipeline<T>::~SNIGPipeline() {
 }
 
 template <typename T>
-Eigen::Matrix<int, Eigen::Dynamic, 1> SNIGPipeline<T>::infer(
+Eigen::Matrix<int, Eigen::Dynamic, 1> GPipe<T>::infer(
   const std::fs::path& input_path,
   const size_t num_inputs,
   const size_t batch_size,
@@ -135,7 +137,7 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> SNIGPipeline<T>::infer(
 }
 
 template <typename T>
-void SNIGPipeline<T>::_set_parameters(
+void GPipe<T>::_set_parameters(
   const size_t num_inputs,
   const size_t batch_size,
   const size_t num_gpus
@@ -158,7 +160,7 @@ void SNIGPipeline<T>::_set_parameters(
 }
 
 template <typename T>
-void SNIGPipeline<T>::_preprocess(const std::fs::path& input_path) {
+void GPipe<T>::_preprocess(const std::fs::path& input_path) {
   Base<T>::log("Preprocessing...... ");
   Base<T>::tic();
 
@@ -179,7 +181,7 @@ void SNIGPipeline<T>::_preprocess(const std::fs::path& input_path) {
 }
 
 template <typename T>
-void SNIGPipeline<T>::_infer() {
+void GPipe<T>::_infer() {
   Base<T>::log("Start inference...... ", "\n");
   Base<T>::tic();
 
@@ -295,7 +297,7 @@ void SNIGPipeline<T>::_infer() {
 }
 
 template <typename T>
-void SNIGPipeline<T>::_weight_alloc() {
+void GPipe<T>::_weight_alloc() {
   for(size_t dev = 0; dev < Base<T>::_num_gpus; ++dev) {
     cudaSetDevice(dev);
     int* W;
@@ -313,7 +315,7 @@ void SNIGPipeline<T>::_weight_alloc() {
 }
 
 template <typename T>
-void SNIGPipeline<T>::_input_alloc() {
+void GPipe<T>::_input_alloc() {
   size_t ylen = Base<T>::_num_inputs * Base<T>::_num_neurons;
   size_t ysize = ylen * sizeof(T);
 
@@ -336,7 +338,7 @@ void SNIGPipeline<T>::_input_alloc() {
 }
 
 template <typename T>
-void SNIGPipeline<T>::_result_alloc() {
+void GPipe<T>::_result_alloc() {
   checkCuda(cudaMallocManaged(&_results, sizeof(int) * Base<T>::_num_inputs));
   checkCuda(cudaMemset(_results, 0, sizeof(int) * Base<T>::_num_inputs));
 }
