@@ -15,10 +15,12 @@ We develop highly optimized inference kernels and leverage the power of CUDA Gra
 
 # Step 1 : Compile SNIG
 
-To compile SNIG, you need Nvidia CUDA Toolkit and Compiler (nvcc) at least v10.0 with -std=c++14.
-
+To compile SNIG, you need :
+ * Nvidia CUDA Toolkit and Compiler ([nvcc](https://developer.nvidia.com/cuda-llvm-compiler)) at least v10.0 with -std=c++14.
+ * GNU C++ Compiler at least v5.0 with -std=c++14.
 ```bash
-~$ nvcc -v    # NVCC must present with version at v10
+~$ nvcc --version    # NVCC must present with version at least v10.0
+~$ g++ --version     # GNU must present with version at least v5.0
 ```
 
 We recommend out-of-source build with cmake:
