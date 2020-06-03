@@ -104,7 +104,7 @@ Move to the `bin` directory:
 You can use either ```./snig ``` for setting details or our srcipt ```./executor.sh``` with tuned parameters.
 ## For ```executor.sh``` :
 ```bash
-~$ ./execuator.sh mode (SNIG, BF, SNIG_pipeline) num_neurons num_layers num_gpus
+~$ ./execuator.sh mode (SNIG, BF, GPipe) num_neurons num_layers num_gpus
   
 "./executor.sh SNIG 65536 1920 4" use SNIG to peform the benchmark with 65536 neurons and 1920 layers under 4 GPUs
 "./executor.sh BF 4096 1920 2" use BF to perform the benchmark with 4096 neurons and 1920 layers under 2 GPUs
@@ -124,7 +124,7 @@ Check ```~$ ./snig -h ``` for more detials.
 ### Command Options for ```snig```
 ```
 -h,--help                   Print this help message and exit
--m,--mode                   select mode(SNIG, SNIG_pipeline, or BF), default is SNIG
+-m,--mode                   select mode(SNIG, GPipe, or BF), default is SNIG
 -w,--weight                 weight directory path, default is ../sample_data/weight/neuron1024/
 -i,--input                  input binary file path, default is ../sample_data/MNIST/sparse-images-1024.b
 -g,--golden                 golden binary file path, default is ../sample_data/MINIST/neuron1024-l120-categories.b
