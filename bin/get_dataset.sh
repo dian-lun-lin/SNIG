@@ -1,5 +1,5 @@
 #usage: 
-#       $1 num_neurons,  -all , or -h
+#       $1 num_neurons,  --all , or -h
 
 bold=$(tput bold)
 normal=$(tput sgr0)
@@ -8,8 +8,10 @@ get_command() {
   # help message
   if [[ "$1" == "-h" ]]; then
     echo "usage : ./get_dataset.sh (num_neurons, --all, or -h)"
+    echo ""
     echo "\"./get_dataset.sh 1024\" would download and extract benchmarks with 1024 neurons"
     echo "\"./get_dataset.sh --all\" would download and extract all benchmarks"
+    echo "All files would be stored in ../dataset"
     exit
   fi
 
@@ -37,6 +39,7 @@ get_command() {
   else
     echo "wrong format!"
     echo "usage : ./get_dataset (num_neurons, --all, or -h)"
+    echo ""
     echo "\"./get_dataset 1024\" would download and extract benchmarks with 1024 neurons"
     echo "\"./get_dataset --all\" would download and extract all benchmarks"
   fi

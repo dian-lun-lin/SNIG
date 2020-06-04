@@ -6,13 +6,11 @@
 inline
 cudaError_t checkCuda(cudaError_t result)
 {
-#if defined(DEBUG) || defined(_DEBUG)
   if (result != cudaSuccess) {
-    fprintf(stderr, "CUDA Runtime Error: %s\n", 
-            cudaGetErrorString(result));
-    assert(result == cudaSuccess);
+    using namespace std::literals::string_literals;
+    throw std::runtime_error("CUDA Runtime Error : "s + cudaGetErrorString(result));
+    //assert(result == cudaSuccess);
   }
-#endif
   return result;
 }
 

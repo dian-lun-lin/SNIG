@@ -29,14 +29,14 @@ endif()
 
 #not test yet
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-  if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "7.3")
-	  message(FATAL_ERROR "\n SNIG requires g++ at least v7.3")
+  if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "5.0")
+	  message(FATAL_ERROR "\n SNIG requires g++ at least v5.0")
   endif()
-## clang++
-elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-  if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "6.0")
-	  message(FATAL_ERROR "\n SNIG requires clang++ at least v6.0")
-  endif() 
+### clang++
+#elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+  #if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "6.0")
+		#message(FATAL_ERROR "\n SNIG requires clang++ at least v6.0")
+  #endif() 
 endif()
 
 # Args
@@ -71,7 +71,8 @@ set(SDNN_3RD_PARTY_DIR ${PROJECT_SOURCE_DIR}/3rd-party)
   #$<$<AND:$<CONFIG:Debug>,$<COMPILE_LANGUAGE:Clang>>:-O0 -g>
   #$<$<AND:$<CONFIG:Debug>,$<COMPILE_LANGUAGE:GNU>>:-O0 -g>
 #)
-#set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}" "-Wall -Wextra -Wfatal-errors")
+
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}" "-Wall -Wextra -Wfatal-errors")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}" "-O2 -march=native")
 set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS}" "-Xcompiler -fopenmp " )
 set(CUDA_NVCC_FLAGS_DEBUG "${CUDA_NVCC_FLAGS_DEBUG}" "-lineinfo")
