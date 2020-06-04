@@ -151,7 +151,7 @@ Execution timeline of each method on completing 65536 neurons and 1920 layers un
 </p>
 
 <p align=center>
-Maximum GPU memory usage under 4 GPUs :
+Peak GPU memory usage under 4 GPUs :
 <img src="./.others/memory_usage.png" />
 </p>
 
