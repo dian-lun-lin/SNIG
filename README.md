@@ -89,7 +89,7 @@ To execute SNIG, you need to transform the benchmarks to binary format first.
 ~$ ./to_binary --num_neurons(--convert_all)
 
 "./to_binary --num_neurons 16384"  would convert benchmarks with 16384 neurons to binary format
-"./to_binary --convert_all true" would convert all benchmarks to format
+"./to_binary --convert_all true" would convert all benchmarks to binary format
 ```
 Note that converting all benchmarks would take some time.
 Check ``` ~$ ./to_binary -h``` for more details.
