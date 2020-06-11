@@ -40,7 +40,7 @@ int main(int argc, char* argv[]) {
 
   bool convert_all = false;
   app.add_option(
-    "--covert_all", 
+    "--convert_all", 
     convert_all, 
     "convert all files, default is false"
   );
@@ -67,17 +67,18 @@ int main(int argc, char* argv[]) {
 
   //convert sample data
   if(sample_data) {
+    size_t neuron{1024};
     input_path  = "../sample_data/MNIST/";
     golden_path = "../sample_data/MNIST/";
     weight_path = "../sample_data/weight/neuron1024/";
-    sec_size = snig::get_sec_size<float>(num_neurons);
-    num_secs = num_neurons / sec_size; 
+    sec_size = snig::get_sec_size<float>(neuron);
+    num_secs = neuron / sec_size; 
 
     convert_to_binary(
       weight_path,
       input_path,
       golden_path,
-      num_neurons,
+      neuron,
       sec_size,
       num_secs,
       120
@@ -87,12 +88,12 @@ int main(int argc, char* argv[]) {
 
   //convert all benchmarks
   if(convert_all) {
-    std::vector<int> neurons_vec{1024, 4096, 16384, 65536};
+    std::vector<size_t> neurons_vec{1024, 4096, 16384, 65536};
     input_path = "../dataset/MNIST/";
     golden_path = "../dataset/MNIST/";
     for(auto& neuron : neurons_vec) {
-      sec_size = snig::get_sec_size<float>(num_neurons);
-      num_secs = num_neurons / sec_size; 
+      sec_size = snig::get_sec_size<float>(neuron);
+      num_secs = neuron / sec_size; 
       weight_path = "../dataset/weight/neuron" + std::to_string(neuron) + "/";
       convert_to_binary(
         weight_path,
