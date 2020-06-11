@@ -12,6 +12,7 @@
 #include <vector>
 #include <queue>
 #include <mutex>
+#include <omp.h>
 
 namespace std {
   namespace fs = experimental::filesystem;  
