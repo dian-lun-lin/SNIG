@@ -5,5 +5,6 @@
 #include "snig/snig.hpp"
 #include "gpipe/gpipe.hpp"
 #include "bf/bf.hpp"
+#include "xtensor/xtensor.hpp"
 
 

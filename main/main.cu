@@ -152,6 +152,17 @@ int main(int argc, char* argv[]) {
     );
     result = bf.infer(input_path, 60000, num_gpus);
   }
+  else if (mode == "xtensor") {
+    snig::XtSequential<float> xt(
+      weight_path, 
+      num_neurons, 
+      num_layers,
+      input_batch_size,
+      bias
+    );
+    //result = xt.infer(input_path);
+    
+  }
   else {
     using namespace std::literals::string_literals;
     throw std::runtime_error("Error mode. Please correct your mode name"s);

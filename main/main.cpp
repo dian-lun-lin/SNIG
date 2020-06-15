@@ -53,30 +53,30 @@ int main(int argc, char* argv[]) {
 
   CLI11_PARSE(app, argc, argv);
 
-  //Data parallel mode
+  //CPU_parallel and sequential move to .others
   Eigen::Matrix<int, Eigen::Dynamic, 1> result;
 
-  if(mode == "CPU_parallel"){
-    sparse_dnn::CPUParallel<float> cpu_parallel(
-        weight_path,
-        bias,
-        num_neurons_per_layer,
-        num_layers
-        );
-    result = cpu_parallel.infer(input_path, 60000);
-  }
-  else if(mode == "sequential"){
-    sparse_dnn::Sequential<float> sequential(
-      weight_path, 
-      bias,
-      num_neurons_per_layer, 
-      num_layers
-    );
-    result = sequential.infer(input_path, 60000);
-  }
+  //if(mode == "CPU_parallel"){
+    //snig::CPUParallel<float> cpu_parallel(
+        //weight_path,
+        //bias,
+        //num_neurons_per_layer,
+        //num_layers
+        //);
+    //result = cpu_parallel.infer(input_path, 60000);
+  //}
+  //else if(mode == "sequential"){
+    //snig::Sequential<float> sequential(
+      //weight_path, 
+      //bias,
+      //num_neurons_per_layer, 
+      //num_layers
+    //);
+    //result = sequential.infer(input_path, 60000);
+  //}
 
-  auto golden = sparse_dnn::read_golden(golden_path, 60000);
-  if(sparse_dnn::is_passed(result, golden)){
+  auto golden = snig::read_golden(golden_path, 60000);
+  if(snig::is_passed(result, golden)){
     std::cout << "CHALLENGE PASSED\n";
   }
   else{

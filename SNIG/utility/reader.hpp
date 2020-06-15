@@ -10,6 +10,7 @@
 #include <string>
 #include <SNIG/utility/matrix_format.h>
 #include <SNIG/utility/matrix_operation.hpp>
+#include <xtensor/xarray.hpp>
 
 namespace std {
   namespace fs = experimental::filesystem;
@@ -80,6 +81,13 @@ void tsv_string_to_CSR_packed_array(
 );
 
 template <typename T>
+xt::xarray<T> tsv_string_to_xt_array(
+  const std::string& s,
+  const size_t rows,
+  const size_t cols
+);
+
+template <typename T>
 std::vector<Eigen::SparseMatrix<T> > read_weight(
   const std::fs::path& weight_dir,
   const size_t num_neurons_per_layer,
@@ -106,6 +114,14 @@ void read_weight(
   int* arr
 );
 
+//xtensor
+template <typename T>
+std::vector<xt::xarray<T> > read_weight_xt(
+  const std::fs::path& weight_dir,
+  const size_t num_neurons,
+  const size_t num_layers
+);
+
 template <typename T>
 void read_weight_binary(
   const std::fs::path& weight_dir,
@@ -116,6 +132,7 @@ void read_weight_binary(
   const size_t pad,
   int* arr
 );
+
 
 template <typename T>
 Eigen::SparseMatrix<T> read_input(
@@ -429,6 +446,39 @@ void tsv_string_to_CSR_packed_array(
 }
 
 template <typename T>
+xt::xarray<T> tsv_string_to_xt_array(
+  const std::string& s,
+  const size_t rows,
+  const size_t cols
+) {
+  //T is either float or double type
+  static_assert(
+    std::is_same<T, float>::value || std::is_same<T, double>::value,
+    "data type must be either float or double"
+  );
+
+  typename xt::xarray<T>::shape_type shape = {rows, cols};
+  xt::xarray<T> mat{shape, 0};
+
+  std::string line;
+  std::istringstream read_s(s);
+  std::vector<std::string> tokens;
+
+  while(std::getline(read_s, line)){
+    std::istringstream lineStream(line);
+    std::string token;
+    tokens.clear();
+    while(std::getline(lineStream, token, '\t')) {
+      tokens.push_back(std::move(token));
+    }
+    mat(std::stoi(tokens[0]) - 1, std::stoi(tokens[1]) - 1) = 
+      to_numeric<T>(tokens[2]);
+  }
+
+  return mat;
+}
+
+template <typename T>
 std::vector<Eigen::SparseMatrix<T> > read_weight(
   const std::fs::path& weight_dir,
   const size_t num_neurons_per_layer,
@@ -457,7 +507,7 @@ std::vector<Eigen::SparseMatrix<T> > read_weight(
         count_nnz(data_str)
       )
     );
-}
+  }
   return mats;
 }
 
@@ -506,6 +556,40 @@ void read_weight(
     );
 
   }
+}
+
+//xtensor
+template <typename T>
+std::vector<xt::xarray<T> > read_weight_xt(
+  const std::fs::path& weight_dir,
+  const size_t num_neurons,
+  const size_t num_layers
+) {
+
+  static_assert(
+    std::is_same<T, float>::value || std::is_same<T, double>::value,
+    "data type must be either float or double"
+  );
+
+  std::vector<xt::xarray<T> > mats;
+  mats.reserve(num_layers);
+
+  //read weights
+  for(size_t i = 0; i < num_layers; ++i) {
+    std::fs::path p = weight_dir;
+    p /= "n" + std::to_string(num_neurons) + "-l"
+      + std::to_string(i + 1) + ".tsv";
+    auto data_str = read_file_to_string(p);
+    mats.emplace_back(
+      tsv_string_to_xt_array<T>(
+        data_str,
+        num_neurons,
+        num_neurons
+      )
+    );
+  }
+
+  return mats;
 }
 
 template <typename T>
