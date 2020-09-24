@@ -4,6 +4,8 @@ Accelerated Large Sparse Neural Network Inference using Task Graph Parallelism
 
 ***Champion of the MIT/Amazon/IEEE HPEC Sparse Deep Neural Network Graph Challenge 2020***
 
+[IEEE HPEC Presentation]("./SNIG_HPEC_present.pdf")
+
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/6c166a884365423a96b5d76e1ba69c15)](https://www.codacy.com/manual/dian-lun-lin/SNIG?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=dian-lun-lin/SNIG&amp;utm_campaign=Badge_Grade)
 
 
