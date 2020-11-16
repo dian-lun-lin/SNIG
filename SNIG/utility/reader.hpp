@@ -198,6 +198,9 @@ inline
 std::string read_file_to_string(const std::fs::path& path);
 
 inline
+std::stringstream read_file_to_sstream(const std::fs::path& path);
+
+inline
 void write_file_from_string(
   const std::fs::path& path,
   const std::string& s
@@ -727,7 +730,7 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> read_golden(
   const size_t num_inputs
 ) {
   std::string line;
-  std::istringstream read_s{read_file_to_string(golden_path)};
+  std::stringstream read_s = read_file_to_sstream(golden_path);
   Eigen::Matrix<int, Eigen::Dynamic, 1> golden = Eigen::Matrix<int, Eigen::Dynamic, 1>::Zero(num_inputs, 1);
 
   while(std::getline(read_s, line)) {
@@ -764,6 +767,22 @@ std::string read_file_to_string(const std::fs::path& path) {
   std::stringstream sstream;
   sstream << f.rdbuf();
   return sstream.str();
+}
+
+inline
+std::stringstream read_file_to_sstream(const std::fs::path& path) {
+  
+  using namespace std::literals::string_literals;
+
+  std::ifstream f{ path };
+
+  if(!f) {
+    throw std::runtime_error("cannot open the file"s + path.c_str());
+  }
+
+  std::stringstream sstream;
+  sstream << f.rdbuf();
+  return sstream;
 }
 
 inline
@@ -852,8 +871,7 @@ void tsv_file_to_binary_file(
     std::fs::path p = weight_dir;
     p /= "n" + std::to_string(cols) + "-l"
       + std::to_string(i + 1) + ".tsv";
-    auto data_str = read_file_to_string(p);
-    std::istringstream read_s(data_str);
+    std::stringstream read_s = read_file_to_sstream(p);
     std::vector<std::string> tokens;
     std::string line;
 
@@ -916,12 +934,11 @@ void tsv_file_to_binary_file(
   );
 
   input_path /= "sparse-images-" + std::to_string(cols) + ".tsv";
-  auto data_str = read_file_to_string(input_path);
 
   auto data_array = std::make_unique<T[]>(rows * cols);
   std::memset(data_array.get(), 0, sizeof(T) * rows * cols);
 
-  std::istringstream read_s(data_str);
+  std::stringstream read_s = read_file_to_sstream(input_path);
   std::vector<std::string> tokens;
   std::string line;
   std::string token;
@@ -954,7 +971,7 @@ void tsv_file_to_binary_file(
 
   std::string line;
   golden_path /= "neuron" + std::to_string(num_features) + "-l" + std::to_string(num_layers) + "-categories.tsv";
-  std::istringstream read_s{read_file_to_string(golden_path)};
+  std::stringstream read_s = read_file_to_sstream(golden_path);
 
   Eigen::Matrix<int, Eigen::Dynamic, 1> golden = Eigen::Matrix<int, Eigen::Dynamic, 1>::Zero(rows, 1);
 
