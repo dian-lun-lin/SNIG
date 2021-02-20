@@ -1,6 +1,6 @@
 <img src="./.others/snig_logo.png" />
 
-A Novel Inference Algorithm for Large Sparse Neural Network using Task Graph Parallelism
+[A Novel Inference Algorithm for Large Sparse Neural Network using Task Graph Parallelism](https://ieeexplore.ieee.org/abstract/document/9286218)
 
 ***Champion of the MIT/Amazon/IEEE HPEC Sparse Deep Neural Network Graph Challenge 2020***
 
