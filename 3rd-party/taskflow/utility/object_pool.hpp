@@ -23,7 +23,7 @@ namespace tf {
 
 #define TF_ENABLE_POOLABLE_ON_THIS                          \
   template <typename T, size_t S> friend class ObjectPool;  \
-  void* _object_pool_block;
+  void* _object_pool_block
 
 // Class: ObjectPool
 //
@@ -65,7 +65,7 @@ template <typename T, size_t S = 65536>
 class ObjectPool { 
   
   // the data column must be sufficient to hold the pointer in freelist  
-  constexpr static size_t X = std::max(sizeof(T*), sizeof(T));
+  constexpr static size_t X = (std::max)(sizeof(T*), sizeof(T));
   //constexpr static size_t X = sizeof(long double) + std::max(sizeof(T*), sizeof(T));
   //constexpr static size_t M = (S - offsetof(Block, data)) / X;
   constexpr static size_t M = S / X;
@@ -87,14 +87,12 @@ class ObjectPool {
     Blocklist* next;
   };
 
-  class GlobalHeap {
-    friend class ObjectPool;
+  struct GlobalHeap {
     std::mutex mutex;
     Blocklist list;
   };
 
-  class LocalHeap {
-    friend class ObjectPool;
+  struct LocalHeap {
     std::mutex mutex;
     Blocklist lists[B];
     size_t u {0};
@@ -156,7 +154,7 @@ class ObjectPool {
 
     LocalHeap& _this_heap();
 
-    constexpr unsigned _next_power_of_two(unsigned n) const;
+    constexpr unsigned _next_pow2(unsigned n) const;
 
     template <class P, class Q>
     constexpr size_t _offset_in_class(const Q P::*member) const;
@@ -204,10 +202,10 @@ class ObjectPool {
 // Constructor
 template <typename T, size_t S>
 ObjectPool<T, S>::ObjectPool(unsigned t) :
-  //_heap_mask   {(_next_power_of_two(t) << 1) - 1u},
-  //_heap_mask   { _next_power_of_two(t<<1) - 1u },
+  //_heap_mask   {(_next_pow2(t) << 1) - 1u},
+  //_heap_mask   { _next_pow2(t<<1) - 1u },
   //_heap_mask   {(t << 1) - 1},
-  _lheap_mask { _next_power_of_two((t+1) << 1) - 1 },
+  _lheap_mask { _next_pow2((t+1) << 1) - 1 },
   _lheaps     { _lheap_mask + 1 } {
 
   _blocklist_init_head(&_gheap.list);
@@ -579,7 +577,7 @@ template <typename... ArgsT>
 T* ObjectPool<T, S>::animate(ArgsT&&... args) {
 
   //std::cout << "construct a new item\n";
-    
+  
   // my logically mapped heap
   LocalHeap& h = _this_heap(); 
   
@@ -588,7 +586,7 @@ T* ObjectPool<T, S>::animate(ArgsT&&... args) {
   h.mutex.lock();
   
   // scan the list of superblocks from most full to least
-  int f = F-1;
+  int f = static_cast<int>(F-1);
   for(; f>=0; f--) {
     if(!_blocklist_is_empty(&h.lists[f])) {
       s = _block_of(h.lists[f].next);
@@ -607,7 +605,7 @@ T* ObjectPool<T, S>::animate(ArgsT&&... args) {
       
       //printf("get a superblock from global heap %lu\n", s->u);
       assert(s->u < M && s->heap == nullptr);
-      f = _bin(s->u + 1);
+      f = static_cast<int>(_bin(s->u + 1));
 
       _blocklist_move_front(&s->list_node, &h.lists[f]);
 
@@ -650,7 +648,7 @@ T* ObjectPool<T, S>::animate(ArgsT&&... args) {
   // take one item from the superblock
   T* mem = _allocate(s);
   
-  int b = _bin(s->u);
+  int b = static_cast<int>(_bin(s->u));
   
   if(b != f) {
     //printf("move superblock from list[%d] to list[%d]\n", f, b);
@@ -710,12 +708,12 @@ void ObjectPool<T, S>::recycle(T* mem) {
       if(s->heap == h) {
         sync = true;
         // deallocate the item from the superblock
-        int f = _bin(s->u);
+        size_t f = _bin(s->u);
         _deallocate(s, mem);
         s->u = s->u - 1;
         h->u = h->u - 1;
 
-        int b = _bin(s->u);
+        size_t b = _bin(s->u);
 
         if(b != f) {
           //printf("move superblock from list[%d] to list[%d]\n", f, b);
@@ -752,17 +750,18 @@ typename ObjectPool<T, S>::LocalHeap&
 ObjectPool<T, S>::_this_heap() {
   // here we don't use thread local since object pool might be
   // created and destroyed multiple times
-  thread_local auto hv = std::hash<std::thread::id>()(std::this_thread::get_id());
-  return _lheaps[hv & _lheap_mask];
+  //thread_local auto hv = std::hash<std::thread::id>()(std::this_thread::get_id());
+  //return _lheaps[hv & _lheap_mask];
 
-  //return _lheaps[
-  //  std::hash<std::thread::id>()(std::this_thread::get_id()) & _lheap_mask
-  //];
+  return _lheaps[
+    std::hash<std::thread::id>()(std::this_thread::get_id()) & _lheap_mask
+  ];
 }
 
-// Function: _next_power_of_two
+// Function: _next_pow2
 template <typename T, size_t S>
-constexpr unsigned ObjectPool<T, S>::_next_power_of_two(unsigned n) const { 
+constexpr unsigned ObjectPool<T, S>::_next_pow2(unsigned n) const { 
+  if(n == 0) return 1;
   n--; 
   n |= n >> 1; 
   n |= n >> 2; 
