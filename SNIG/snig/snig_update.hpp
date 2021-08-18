@@ -18,7 +18,7 @@ namespace std {
 namespace snig{
 
 template <typename T>
-class SNIG : public Base<T> {
+class SNIGUpdate : public Base<T> {
 
   static_assert(
     std::is_same<T, float>::value || std::is_same<T, double>::value,
@@ -38,7 +38,8 @@ class SNIG : public Base<T> {
     size_t _batch_ylen;
     size_t _batch_ysize;
     int* _results;
-    size_t _num_duplicates; // duplicate inputs for experiments on updating methods
+    bool _is_init{true};
+    size_t _num_duplicates{1}; // duplicate inputs for experiments on updating methods
                                // number of inputs = _num_duplicates x _num_inputs
 
     void _set_parameters(
@@ -60,7 +61,7 @@ class SNIG : public Base<T> {
 
   public:
 
-    SNIG(
+    SNIGUpdate(
       const dim3& threads,
       const std::fs::path& weight_path,
       const T bias = -.3f,
@@ -69,7 +70,7 @@ class SNIG : public Base<T> {
       const size_t num_duplicates = 1
     );
 
-    ~SNIG();
+    ~SNIGUpdate();
 
     Eigen::Matrix<int, Eigen::Dynamic, 1> infer(
       const std::fs::path& input_path,
@@ -82,11 +83,11 @@ class SNIG : public Base<T> {
 };
 
 // ----------------------------------------------------------------------------
-// Definition of SNIG
+// Definition of SNIGUpdate
 // ----------------------------------------------------------------------------
 
 template <typename T>
-SNIG<T>::SNIG(
+SNIGUpdate<T>::SNIGUpdate(
   const dim3& threads,
   const std::fs::path& weight_path,
   const T bias,
@@ -97,11 +98,11 @@ SNIG<T>::SNIG(
   Base<T>(threads, weight_path, bias, num_neurons_per_layer, num_layers)
 {
   _num_duplicates = num_duplicates;
-  Base<T>::log("Constructing SNIG engine......", "\n");
+  Base<T>::log("Constructing SNIGUpdate engine......", "\n");
 }
 
 template <typename T>
-SNIG<T>::~SNIG() {
+SNIGUpdate<T>::~SNIGUpdate() {
 
   checkCuda(cudaFree(_source_Y));
   checkCuda(cudaFree(_source_is_nonzero_row));
@@ -122,7 +123,7 @@ SNIG<T>::~SNIG() {
 }
 
 template <typename T>
-Eigen::Matrix<int, Eigen::Dynamic, 1> SNIG<T>::infer(
+Eigen::Matrix<int, Eigen::Dynamic, 1> SNIGUpdate<T>::infer(
   const std::fs::path& input_path,
   const size_t num_inputs,
   const size_t batch_size,
@@ -150,7 +151,7 @@ Eigen::Matrix<int, Eigen::Dynamic, 1> SNIG<T>::infer(
 }
 
 template <typename T>
-void SNIG<T>::_set_parameters(
+void SNIGUpdate<T>::_set_parameters(
   const size_t num_inputs,
   const size_t batch_size,
   const size_t num_weight_buffers,
@@ -170,7 +171,7 @@ void SNIG<T>::_set_parameters(
 }
 
 template <typename T>
-void SNIG<T>::_preprocess(const std::fs::path& input_path) {
+void SNIGUpdate<T>::_preprocess(const std::fs::path& input_path) {
   Base<T>::log("Preprocessing...... ");
   Base<T>::tic();
 
@@ -189,13 +190,13 @@ void SNIG<T>::_preprocess(const std::fs::path& input_path) {
 }
 
 template <typename T>
-void SNIG<T>::_infer() {
+void SNIGUpdate<T>::_infer() {
   Base<T>::log("Start inference...... ", "\n");
   Base<T>::tic();
   size_t accumulated_duplicates{0}; 
 
   //Use taskflow and cudaGraph to implement task graph
-  tf::Taskflow taskflow("SNIG");
+  tf::Taskflow taskflow("SNIGUpdate");
   tf::Executor executor;
   std::vector<tf::Task> first_fetchs;
   std::vector<tf::Task> cudaflows;
@@ -204,12 +205,31 @@ void SNIG<T>::_infer() {
   cudaflows.reserve(Base<T>::_num_gpus);
   fetchs.reserve(Base<T>::_num_gpus);
 
+  std::vector<std::unique_ptr<tf::cudaFlow>> cfs;
+  for(size_t i = 0; i < Base<T>::_num_gpus; ++i) {
+    cfs.emplace_back(std::make_unique<tf::cudaFlow>());
+  }
+
+  std::vector<tf::cudaTask> idents;
+  idents.resize(Base<T>::_num_gpus);
+
+  std::vector<std::vector<tf::cudaTask>> weight_copies;
+  std::vector<std::vector<tf::cudaTask>> infers;
+  weight_copies.resize(Base<T>::_num_gpus);
+  infers.resize(Base<T>::_num_gpus);
+  for(size_t i = 0; i < Base<T>::_num_gpus; ++i) {
+    weight_copies[i].resize(Base<T>::_num_layers);
+    infers[i].resize(Base<T>::_num_layers);
+  }
+
+
   std::atomic<size_t> finished_inputs{0};
   std::vector<int*> dev_results(Base<T>::_num_gpus, nullptr);
 
   dim3 grid_dim(_batch_size, Base<T>::_num_secs, 1);
 
   tf::Task start = taskflow.emplace([](){}).name("start");
+
   tf::Task start_inner = taskflow.emplace([](){}).name("start_inner");
 
   for(size_t dev = 0; dev < Base<T>::_num_gpus; ++dev) {
@@ -229,61 +249,104 @@ void SNIG<T>::_infer() {
       return is_end;
     }).name("first_fetch"));
 
-    cudaflows.emplace_back(taskflow.emplace_on([&, dev](tf::cudaFlow& cf){
-      std::vector<tf::cudaTask> weight_copies;
-      std::vector<tf::cudaTask> infers;
-      weight_copies.reserve(Base<T>::_num_layers);
-      infers.reserve(Base<T>::_num_layers);
+    cudaflows.emplace_back(taskflow.emplace([&, dev](){
+      tf::cudaScopedDevice gpu(dev);
+      if(_is_init) {
+        // initialize cuda graphs
 
-      for(size_t cur_layer = 0; cur_layer < Base<T>::_num_layers; cur_layer += _num_weight_buffers) {
-        for(size_t k = 0; k < _num_weight_buffers; ++k) {
-          //tasks of cudaflow
-          weight_copies.emplace_back(cf.copy(
-            _dev_W[dev][k],
-            Base<T>::_host_pinned_weight + (cur_layer + k) * Base<T>::_pp_wlen,
-            Base<T>::_pp_wlen
-          ).name("weight_copy"));
+        for(size_t cur_layer = 0; cur_layer < Base<T>::_num_layers; cur_layer += _num_weight_buffers) {
+          for(size_t k = 0; k < _num_weight_buffers; ++k) {
+            //tasks of cudaflow
+            weight_copies[dev][cur_layer + k] = cfs[dev]->copy(
+              _dev_W[dev][k],
+              Base<T>::_host_pinned_weight + (cur_layer + k) * Base<T>::_pp_wlen,
+              Base<T>::_pp_wlen
+            ).name("weight_copy");
 
-          // transformed CSC weight matrix equals to CSR with exchanged row and col
-          int* col_w = _dev_W[dev][k];
-          int* row_w = _dev_W[dev][k] + Base<T>::_num_neurons * Base<T>::_num_secs + 1;
-          T* val_w = (T*)(_dev_W[dev][k] + Base<T>::_p_w_index_len);
-          infers.emplace_back(cf.kernel(
-            grid_dim,
-            Base<T>::_threads,
-            sizeof(T) * Base<T>::_sec_size,
-            snig_inference<T>,
-            _dev_Y[dev][k % 2],
-            _dev_is_nonzero_row[dev][k % 2],
-            Base<T>::_sec_size,
-            Base<T>::_num_secs,
-            Base<T>::_num_neurons,
-            col_w,
-            row_w,
-            val_w,
-            Base<T>::_bias,
-            _dev_is_nonzero_row[dev][(k + 1) % 2],
-            _dev_Y[dev][(k + 1) % 2]
-          ).name("Inference"));
+            // transformed CSC weight matrix equals to CSR with exchanged row and col
+            int* col_w = _dev_W[dev][k];
+            int* row_w = _dev_W[dev][k] + Base<T>::_num_neurons * Base<T>::_num_secs + 1;
+            T* val_w = (T*)(_dev_W[dev][k] + Base<T>::_p_w_index_len);
+            infers[dev][cur_layer + k] = cfs[dev]->kernel(
+              grid_dim,
+              Base<T>::_threads,
+              sizeof(T) * Base<T>::_sec_size,
+              snig_inference<T>,
+              _dev_Y[dev][k % 2],
+              _dev_is_nonzero_row[dev][k % 2],
+              Base<T>::_sec_size,
+              Base<T>::_num_secs,
+              Base<T>::_num_neurons,
+              col_w,
+              row_w,
+              val_w,
+              Base<T>::_bias,
+              _dev_is_nonzero_row[dev][(k + 1) % 2],
+              _dev_Y[dev][(k + 1) % 2]
+            ).name("Inference");
+          }
         }
+
+        // TODO: consider parameterizing the thread numbers
+        idents[dev] = cfs[dev]->kernel(16, 512, 0, identify<T>, _dev_Y[dev][0], _batch_size, Base<T>::_num_neurons, dev_results[dev]);
+
+        //dependencies of cudaflow
+        for(size_t cur_layer = 0; cur_layer < Base<T>::_num_layers; ++cur_layer) {
+          weight_copies[dev][cur_layer].precede(infers[dev][cur_layer]);
+
+          if(cur_layer + _num_weight_buffers < Base<T>::_num_layers) {
+            infers[dev][cur_layer].precede(weight_copies[dev][cur_layer + _num_weight_buffers]);
+          }
+          if(cur_layer + 1 < Base<T>::_num_layers) {
+            infers[dev][cur_layer].precede(infers[dev][cur_layer + 1]);
+          }
+        }
+        infers[dev][Base<T>::_num_layers - 1].precede(idents[dev]);
+        _is_init = false;
+      }
+      else {
+        // update cuda graphs
+        for(size_t cur_layer = 0; cur_layer < Base<T>::_num_layers; cur_layer += _num_weight_buffers) {
+          for(size_t k = 0; k < _num_weight_buffers; ++k) {
+            //tasks of cudaflow
+            //cfs[dev].copy(
+              //weight_copies[dev][cur_layer],
+              //_dev_W[dev][k],
+              //Base<T>::_host_pinned_weight + (cur_layer + k) * Base<T>::_pp_wlen,
+              //Base<T>::_pp_wlen
+            //).name("weight_copy");
+
+            // transformed CSC weight matrix equals to CSR with exchanged row and col
+            int* col_w = _dev_W[dev][k];
+            int* row_w = _dev_W[dev][k] + Base<T>::_num_neurons * Base<T>::_num_secs + 1;
+            T* val_w = (T*)(_dev_W[dev][k] + Base<T>::_p_w_index_len);
+            cfs[dev]->kernel(
+              infers[dev][cur_layer + k],
+              grid_dim,
+              Base<T>::_threads,
+              sizeof(T) * Base<T>::_sec_size,
+              snig_inference<T>,
+              _dev_Y[dev][k % 2],
+              _dev_is_nonzero_row[dev][k % 2],
+              Base<T>::_sec_size,
+              Base<T>::_num_secs,
+              Base<T>::_num_neurons,
+              col_w,
+              row_w,
+              val_w,
+              Base<T>::_bias,
+              _dev_is_nonzero_row[dev][(k + 1) % 2],
+              _dev_Y[dev][(k + 1) % 2]
+            );
+          }
+        }
+
+        // TODO: consider parameterizing the thread numbers
+        cfs[dev]->kernel(idents[dev], 16, 512, 0, identify<T>, _dev_Y[dev][0], _batch_size, Base<T>::_num_neurons, dev_results[dev]);
       }
 
-      // TODO: consider parameterizing the thread numbers
-      tf::cudaTask ident = cf.kernel(16, 512, 0, identify<T>, _dev_Y[dev][0], _batch_size, Base<T>::_num_neurons, dev_results[dev]);
-
-      //dependencies of cudaflow
-      for(size_t cur_layer = 0; cur_layer < Base<T>::_num_layers; ++cur_layer) {
-        weight_copies[cur_layer].precede(infers[cur_layer]);
-
-        if(cur_layer + _num_weight_buffers < Base<T>::_num_layers) {
-          infers[cur_layer].precede(weight_copies[cur_layer + _num_weight_buffers]);
-        }
-        if(cur_layer + 1 < Base<T>::_num_layers) {
-          infers[cur_layer].precede(infers[cur_layer + 1]);
-        }
-      }
-      infers[Base<T>::_num_layers - 1].precede(ident);
-    }, dev).name("GPU"));
+      cfs[dev]->offload();
+    }).name("GPU"));
 
     fetchs.emplace_back(taskflow.emplace([&, dev](){
       cudaSetDevice(dev);
@@ -320,7 +383,7 @@ void SNIG<T>::_infer() {
     fetchs[dev].precede(cudaflows[dev], duplicate);
     duplicate.precede(start_inner, stop);
   }
-  
+
   executor.run(taskflow).wait();
 
   checkCuda(cudaSetDevice(0));
@@ -330,7 +393,7 @@ void SNIG<T>::_infer() {
 }
 
 template <typename T>
-void SNIG<T>::_weight_alloc() {
+void SNIGUpdate<T>::_weight_alloc() {
   std::vector<int*> W(_num_weight_buffers, nullptr);
 
   for(size_t dev = 0; dev < Base<T>::_num_gpus; ++dev) {
@@ -347,7 +410,7 @@ void SNIG<T>::_weight_alloc() {
 }
 
 template <typename T>
-void SNIG<T>::_input_alloc() {
+void SNIGUpdate<T>::_input_alloc() {
   size_t ylen = Base<T>::_num_inputs *  Base<T>::_num_neurons;
   size_t ysize = ylen * sizeof(T);
 
@@ -370,7 +433,7 @@ void SNIG<T>::_input_alloc() {
 }
 
 template <typename T>
-void SNIG<T>::_result_alloc() {
+void SNIGUpdate<T>::_result_alloc() {
   checkCuda(cudaMallocManaged(&_results, sizeof(int) * Base<T>::_num_inputs));
   checkCuda(cudaMemset(_results, 0, sizeof(int) * Base<T>::_num_inputs));
 }

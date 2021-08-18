@@ -29,14 +29,14 @@ endif()
 
 #not test yet
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-  if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "5.0")
-	  message(FATAL_ERROR "\n SNIG requires g++ at least v5.0")
+  if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "7.0")
+	  message(FATAL_ERROR "\n SNIG requires g++ at least v7.0")
   endif()
-### clang++
-#elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-  #if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "6.0")
-		#message(FATAL_ERROR "\n SNIG requires clang++ at least v6.0")
-  #endif() 
+## clang++
+elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+  if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "6.0")
+    message(FATAL_ERROR "\n SNIG requires clang++ at least v6.0")
+  endif() 
 endif()
 
 # Args
@@ -75,8 +75,8 @@ set(SDNN_3RD_PARTY_DIR ${PROJECT_SOURCE_DIR}/3rd-party)
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}" "-Wall -Wextra -Wfatal-errors")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}" "-O2 -march=native")
 set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS}" "-Xcompiler -fopenmp " )
-set(CUDA_NVCC_FLAGS_DEBUG "${CUDA_NVCC_FLAGS_DEBUG}" "-lineinfo")
-set(CUDA_NVCC_FLAGS_RELEASE "${CUDA_NVCC_FLAGS_RELEASE}" "-O2 -w ")
+set(CUDA_NVCC_FLAGS_DEBUG "${CUDA_NVCC_FLAGS_DEBUG}" "--extended-lambda -std=c++17 -lineinfo")
+set(CUDA_NVCC_FLAGS_RELEASE "${CUDA_NVCC_FLAGS_RELEASE}" "--extended-lambda -std=c++17 -O2 -w ")
 
 #default
 add_library(default_settings INTERFACE)
@@ -90,7 +90,7 @@ target_link_libraries(
 
 
 # CXX target properties
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(CUDA QUIET REQUIRED)
 # Thread
@@ -127,7 +127,7 @@ include_directories(${PROJECT_SOURCE_DIR}/3rd-party/)
 #--------interface------
 add_library(${PROJECT_NAME} INTERFACE)
 
-target_compile_features(${PROJECT_NAME} INTERFACE cxx_std_14)
+target_compile_features(${PROJECT_NAME} INTERFACE cxx_std_17)
 target_include_directories(${PROJECT_NAME} INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
   $<INSTALL_INTERFACE:include/> 
@@ -187,6 +187,9 @@ target_link_libraries(snig ${PROJECT_NAME} stdc++fs OpenMP::OpenMP_CXX)
 
 cuda_add_executable(to_binary ${PROJECT_SOURCE_DIR}/main/tsv_file_to_binary.cu)
 target_link_libraries(to_binary ${PROJECT_NAME} stdc++fs)
+
+set_property(TARGET snig PROPERTY CUDA_STANDARD 17)
+set_property(TARGET to_binary PROPERTY CUDA_STANDARD 17)
 
 #CPU parallel. Not support yet.
 #cuda_add_executable(diagonal_to_binary ${PROJECT_SOURCE_DIR}/main/diagonal_to_binary.cu)

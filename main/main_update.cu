@@ -20,7 +20,6 @@ int main(int argc, char* argv[]) {
   //        --input_batch_size           :  input batch size, must be a factor of num_inputs (60000)
   //        --num_weight_buffers         :  number of weight buffers, must be an even number
   //        --thread_dimension           :  thread dimsion for inference kernel, constrained by the maximum number of threads (typically 1024)
-  //        --num_duplicates(-d)             :  number of duplicate inputs. for experiments
 
   //example1:  
   //        ./snig
@@ -34,7 +33,7 @@ int main(int argc, char* argv[]) {
   app.add_option(
     "-m, --mode", 
     mode, 
-    "select mode(SNIG, SNIGUpdate, GPipe, or BF), default is SNIG"
+    "select mode(SNIG, GPipe, or BF), default is SNIG"
   );
 
   std::fs::path weight_path("../sample_data/weight/neuron1024/");
@@ -114,13 +113,6 @@ int main(int argc, char* argv[]) {
     "thread dimension for inference kernel, need 3 parameters, default is 2 512 1, constrained by the maximum number of threads (typically 1024)"
   )->expected(3);
 
-  size_t num_duplicates = 1;
-  app.add_option(
-    "-d, --num_duplicates", 
-    num_duplicates, 
-    "number of duplicate inputs. Only for experiments on SNIG or SNIGUpdate"
-  );
-
   CLI11_PARSE(app, argc, argv);
 
   Eigen::Matrix<int, Eigen::Dynamic, 1> result;
@@ -135,21 +127,9 @@ int main(int argc, char* argv[]) {
       weight_path, 
       bias,
       num_neurons, 
-      num_layers,
-      num_duplicates
+      num_layers
     );
     result = snig.infer(input_path, 60000, input_batch_size, num_weight_buffers, num_gpus);
-  }
-  else if(mode == "SNIGUpdate") {
-    snig::SNIGUpdate<float> snigu(
-      thread_dimension,
-      weight_path, 
-      bias,
-      num_neurons, 
-      num_layers,
-      num_duplicates
-    );
-    result = snigu.infer(input_path, 60000, input_batch_size, num_weight_buffers, num_gpus);
   }
   else if(mode == "GPipe") {
     snig::GPipe<float> gpipe(
