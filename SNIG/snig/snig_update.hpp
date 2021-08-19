@@ -198,6 +198,7 @@ void SNIGUpdate<T>::_infer() {
   //Use taskflow and cudaGraph to implement task graph
   tf::Taskflow taskflow("SNIGUpdate");
   tf::Executor executor;
+  std::vector<tf::Task> stop_inners;
   std::vector<tf::Task> first_fetchs;
   std::vector<tf::Task> cudaflows;
   std::vector<tf::Task> fetchs;
@@ -364,6 +365,7 @@ void SNIGUpdate<T>::_infer() {
       return is_end;
     }).name("fetch"));
 
+    stop_inners.emplace_back(taskflow.emplace([](){}).name("stop_inner"));
   }
 
   tf::Task duplicate = taskflow.emplace([&](){
@@ -380,7 +382,8 @@ void SNIGUpdate<T>::_infer() {
     start_inner.precede(first_fetchs[dev]);
     first_fetchs[dev].precede(cudaflows[dev], duplicate);
     cudaflows[dev].precede(fetchs[dev]);
-    fetchs[dev].precede(cudaflows[dev], duplicate);
+    fetchs[dev].precede(cudaflows[dev], stop_inners[dev]);
+    stop_inners[dev].precede(duplicate);
     duplicate.precede(start_inner, stop);
   }
 

@@ -197,6 +197,7 @@ void SNIG<T>::_infer() {
   //Use taskflow and cudaGraph to implement task graph
   tf::Taskflow taskflow("SNIG");
   tf::Executor executor;
+  std::vector<tf::Task> stop_inners;
   std::vector<tf::Task> first_fetchs;
   std::vector<tf::Task> cudaflows;
   std::vector<tf::Task> fetchs;
@@ -301,7 +302,11 @@ void SNIG<T>::_infer() {
       return is_end;
     }).name("fetch"));
 
+    stop_inners.emplace_back(taskflow.emplace([](){}).name("stop_inner"));
   }
+  
+  tf::Task stop = taskflow.emplace([](){}).name("stop");
+
 
   tf::Task duplicate = taskflow.emplace([&](){
     finished_inputs = 0;
@@ -309,7 +314,6 @@ void SNIG<T>::_infer() {
     return (accumulated_duplicates < _num_duplicates) ? 0 : 1;
   }).name("duplicate");
 
-  tf::Task stop = taskflow.emplace([](){}).name("stop");
 
   //dependencies of taskflow
   for(size_t dev = 0; dev < Base<T>::_num_gpus; ++dev) {
@@ -317,7 +321,8 @@ void SNIG<T>::_infer() {
     start_inner.precede(first_fetchs[dev]);
     first_fetchs[dev].precede(cudaflows[dev], duplicate);
     cudaflows[dev].precede(fetchs[dev]);
-    fetchs[dev].precede(cudaflows[dev], duplicate);
+    fetchs[dev].precede(cudaflows[dev], stop_inners[dev]);
+    stop_inners[dev].precede(duplicate);
     duplicate.precede(start_inner, stop);
   }
   
