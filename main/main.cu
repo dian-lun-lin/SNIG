@@ -34,7 +34,7 @@ int main(int argc, char* argv[]) {
   app.add_option(
     "-m, --mode", 
     mode, 
-    "select mode(SNIG, SNIGUpdate, GPipe, or BF), default is SNIG"
+    "select mode(SNIG, SNIGUpdate, SNIGCapturer, SNIGCapturerUpdate, GPipe, or BF), default is SNIG"
   );
 
   std::fs::path weight_path("../sample_data/weight/neuron1024/");
@@ -150,6 +150,28 @@ int main(int argc, char* argv[]) {
       num_duplicates
     );
     result = snigu.infer(input_path, 60000, input_batch_size, num_weight_buffers, num_gpus);
+  }
+  else if(mode == "SNIGCapturer") {
+    snig::SNIGCapturer<float> snigc(
+      thread_dimension,
+      weight_path, 
+      bias,
+      num_neurons, 
+      num_layers,
+      num_duplicates
+    );
+    result = snigc.infer(input_path, 60000, input_batch_size, num_weight_buffers, num_gpus);
+  }
+  else if(mode == "SNIGCapturerUpdate") {
+    snig::SNIGCapturerUpdate<float> snigcu(
+      thread_dimension,
+      weight_path, 
+      bias,
+      num_neurons, 
+      num_layers,
+      num_duplicates
+    );
+    result = snigcu.infer(input_path, 60000, input_batch_size, num_weight_buffers, num_gpus);
   }
   else if(mode == "GPipe") {
     snig::GPipe<float> gpipe(
