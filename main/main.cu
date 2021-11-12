@@ -151,6 +151,17 @@ int main(int argc, char* argv[]) {
     );
     result = snigu.infer(input_path, 60000, input_batch_size, num_weight_buffers, num_gpus);
   }
+  else if(mode == "SNIGUpdateWOResetting") {
+    snig::SNIGUpdateWOResetting<float> snigu(
+      thread_dimension,
+      weight_path, 
+      bias,
+      num_neurons, 
+      num_layers,
+      num_duplicates
+    );
+    result = snigu.infer(input_path, 60000, input_batch_size, num_weight_buffers, num_gpus);
+  }
   else if(mode == "SNIGCapturer") {
     snig::SNIGCapturer<float> snigc(
       thread_dimension,
